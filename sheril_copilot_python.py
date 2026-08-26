@@ -856,13 +856,13 @@ def main():
     print("[Succès] Structures JSON narratives écrites dans la feuille 'narrative_outputs'.")
 
     # 4. APPEL IA AVEC LE FICHIER JSON EN INPUT
-    texte_gazette, texte_militaire = generer_textes_ia(payload_complet_str, tours[-1])
+    #texte_gazette, texte_militaire = generer_textes_ia(payload_complet_str, tours[-1])
     print("\n[IA] Textes générés avec succès à partir du JSON.")
-    envoyer_messages_multiples_discord([
+    """ envoyer_messages_multiples_discord([
         f"🚀 **[Tour {tours[-1]}] Analyse terminée. Diffusion des bulletins de l'IA...**",
         texte_gazette,
         texte_militaire
-    ])
+    ]) """
     print("--- PIPELINE TERMINÉ AVEC SUCCÈS ---")
 
 if __name__ == "__main__":
