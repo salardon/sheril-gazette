@@ -577,18 +577,6 @@ def compiler_indicateurs_avances_et_seuils(historique_tours_dict):
 
     for jid, data in dernier_tour_dict.items():
         data.update(compteurs_cumules.get(jid, {}))
-        print(
-            f"[LOG] Commandant {data.get('nom', f'#{jid}')} ({jid}) : "
-            f"{data['cumul_technologies_donnees']} technologie(s) donnée(s), "
-            f"{data['cumul_technologies_recues']} reçue(s), "
-            f"{data['cumul_centaures_donnes']} centaure(s) donné(s), "
-            f"{data['cumul_centaures_recus']} reçu(s), "
-            f"{data['cumul_planetes_prises']} planète(s) prise(s), "
-            f"{data['cumul_planetes_perdues']} perdue(s), "
-            f"{data['cumul_lieutenants_achetes']} lieutenant(s) acheté(s), "
-            f"{data['cumul_lieutenants_morts']} mort(s), "
-            f"{data['cumul_centaures_depenses_lieutenants']} centaure(s) dépensé(s)"
-        )
 
     metriques_cibles = ["puissance", "planetes", "pop", "centaures", "reputation", "tech_valeur", "rayonnement_pts", "popvs_pts", "offensive_valeur", "impact"]
     moyennes_globales = {m: float(df[df["tour_id"] == dernier_tour_id][m].mean()) for m in metriques_cibles}
@@ -733,6 +721,17 @@ def generer_structs_json_joueurs_avancees(dernier_tour_dict):
             "joueur": nom,
             "race": race,
             "impact": int(data.get("puissance", 0) - data.get("pop", 0) - data.get("centaures", 0)),
+            "compteur": {
+                "cumul_technologies_donnees": int(data.get("cumul_technologies_donnees", 0)),
+                "cumul_technologies_recues": int(data.get("cumul_technologies_recues", 0)),
+                "cumul_centaures_donnes": float(data.get("cumul_centaures_donnes", 0.0)),
+                "cumul_centaures_recus": float(data.get("cumul_centaures_recus", 0.0)),
+                "cumul_planetes_prises": int(data.get("cumul_planetes_prises", 0)),
+                "cumul_planetes_perdues": int(data.get("cumul_planetes_perdues", 0)),
+                "cumul_lieutenants_achetes": int(data.get("cumul_lieutenants_achetes", 0)),
+                "cumul_lieutenants_morts": int(data.get("cumul_lieutenants_morts", 0)),
+                "cumul_centaures_depenses_lieutenants": float(data.get("cumul_centaures_depenses_lieutenants", 0.0))
+            },
             "outliers": outliers,
             "interactions": {
                 "combats_recus": combats_recus,
@@ -763,6 +762,7 @@ def generer_gazette_ia(joueurs_json_str, tour_id):
     - **Vulgarisation totale des outliers** : Explique ce qui se cache derrière chaque anomalie (croissance foudroyante, essoufflement, domination, records) sous forme d'anecdotes ou de tendances politiques/économiques concrètes.
     - **Bannissement absolu du jargon technique et mathématique** : Ne mentionne jamais explicitement les concepts de mathématiques, de statistiques, d'algorithmes, de dérivées, d'écarts types, d'all-time high ou d'Isolation Forest. Tout doit être raconté par le prisme de la vie des peuples et des ambitions des dirigeants.
     - inclus les rubriques: edito, nouvelles, tops et flops, brèves et rumeurs, horoscope et humeur des races en évitant les répétitions entre chaque rubrique
+    - Les rubriques « tops et flops » et « brèves et rumeurs » doivent aussi s'appuyer explicitement sur les valeurs de la catégorie « compteur » du JSON. Mets en avant les cumuls remarquables de technologies, centaures, planètes et lieutenants, sans réciter les valeurs comme un tableau.
     - Conserve un ton vivant, accrocheur et divertissant.
 
     RÈGLES D'INTERPRÉTATION STRICTES DES OUTLIERS DANS LE JSON :
