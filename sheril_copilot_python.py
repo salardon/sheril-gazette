@@ -10,16 +10,6 @@ Original file is located at
 # Changement effectué depuis VS Code pour vérifier la chaîne VS Code > GitHub > Google Colab.
 import os
 
-repo_path = "/content/sheril-gazette"
-
-if not os.path.exists(repo_path):
-    !git clone https://github.com/salardon/sheril-gazette.git
-else:
-    %cd /content/sheril-gazette
-    !git pull origin main
-
-os.chdir(repo_path)
-
 # Commented out IPython magic to ensure Python compatibility.
 # %%writefile config_parsers.py
 # import re
@@ -866,7 +856,7 @@ def main():
     print("[Succès] Structures JSON narratives écrites dans la feuille 'narrative_outputs'.")
 
     # 4. APPEL IA AVEC LE FICHIER JSON EN INPUT
-    #texte_gazette, texte_militaire = generer_textes_ia(payload_complet_str, tours[-1])
+    texte_gazette, texte_militaire = generer_textes_ia(payload_complet_str, tours[-1])
     print("\n[IA] Textes générés avec succès à partir du JSON.")
     envoyer_messages_multiples_discord([
         f"🚀 **[Tour {tours[-1]}] Analyse terminée. Diffusion des bulletins de l'IA...**",
