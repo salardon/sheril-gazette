@@ -13,8 +13,35 @@ def parse_evt(soup, tour_id):
     regex_argent = re.compile(r"Le commandant\s+(.+?)\s*\((\d+)\)\s+as?\s+transmis\s+([\d\s\.,\xA0]+)\s+au commandant\s+(.+?)\s*\((\d+)\)", re.IGNORECASE)
     regex_centaures = re.compile(r"Le commandant\s+(.+?)\s*\((\d+)\)\s+as?\s+transmis\s+([\d\s\.,\xA0]+)\s+centaures?\s+au commandant\s+(.+?)\s*\((\d+)\)", re.IGNORECASE)
     regex_tech = re.compile(r"Le commandant\s+(.+?)\s*\((\d+)\)\s+as?\s+transmis\s+la technologie\s+(.+?)\s+au commandant\s+(.+?)\s*\((\d+)\)", re.IGNORECASE)
+    regex_achat_lieutenant = re.compile(r"(?:Le commandant\s+)?(.+?)\s*\((\d+)\)\s+vient d[’']enr[oô]ler le lieutenant\s+(.+?)\s+pour la somme de\s+([\d\s\.,\xA0\u202f]+)", re.IGNORECASE)
+    regex_mort_lieutenant = re.compile(r"Le lieutenant\s+(.+?)\s+du commandant\s+(.+?)\s*\((\d+)\)\s+vient trouver la mort lors d'un combat", re.IGNORECASE)
 
     for ligne in lignes:
+        match_achat = regex_achat_lieutenant.search(ligne)
+        if match_achat:
+            nom_commandant, id_commandant, nom_lieutenant, montant_str = match_achat.groups()
+            montant_propre = montant_str.strip().rstrip(".").replace("\xa0", "").replace("\u202f", "").replace(" ", "").replace(",", ".")
+            try:
+                montant = float(montant_propre)
+            except ValueError:
+                montant = 0.0
+            dons_emis.append({
+                "emetteur": str(id_commandant), "emetteur_nom": nom_commandant.strip(),
+                "nom_lieutenant": nom_lieutenant.strip(), "montant": montant,
+                "type_don": "Achat_Lieutenant"
+            })
+            continue
+
+        match_mort = regex_mort_lieutenant.search(ligne)
+        if match_mort:
+            nom_lieutenant, nom_commandant, id_commandant = match_mort.groups()
+            dons_emis.append({
+                "emetteur": str(id_commandant), "emetteur_nom": nom_commandant.strip(),
+                "nom_lieutenant": nom_lieutenant.strip(), "montant": 0.0,
+                "type_don": "Mort_Lieutenant"
+            })
+            continue
+
         match_tech = regex_tech.search(ligne)
         if match_tech:
             nom_emetteur, id_emetteur, nom_tech, nom_receveur, id_receveur = match_tech.groups()
@@ -53,7 +80,7 @@ def parse_evt(soup, tour_id):
             dons_emis.append({
                 "emetteur": str(id_emetteur), "emetteur_nom": nom_emetteur.strip(),
                 "receveur": str(id_receveur), "receveur_nom": nom_receveur.strip(),
-                "montant": montant, "type_don": "Argent"
+                "montant": montant, "type_don": "Centaures"
             })
     return {"dons_emis": dons_emis}
 
