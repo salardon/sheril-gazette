@@ -762,7 +762,7 @@ def generer_gazette_ia(joueurs_json_str, tour_id):
     - **Vulgarisation totale des outliers** : Explique ce qui se cache derrière chaque anomalie (croissance foudroyante, essoufflement, domination, records) sous forme d'anecdotes ou de tendances politiques/économiques concrètes.
     - **Bannissement absolu du jargon technique et mathématique** : Ne mentionne jamais explicitement les concepts de mathématiques, de statistiques, d'algorithmes, de dérivées, d'écarts types, d'all-time high ou d'Isolation Forest. Tout doit être raconté par le prisme de la vie des peuples et des ambitions des dirigeants.
     - inclus les rubriques: edito, nouvelles, tops et flops, brèves et rumeurs, horoscope et humeur des races en évitant les répétitions entre chaque rubrique
-    - Les rubriques « tops et flops » et « brèves et rumeurs » doivent aussi s'appuyer explicitement sur les valeurs de la catégorie « compteur » du JSON. Mets en avant les cumuls remarquables de technologies, centaures, planètes et lieutenants, sans réciter les valeurs comme un tableau.
+    - Les rubriques « tops et flops » et « brèves et rumeurs » doivent aussi s'appuyer explicitement sur les valeurs de la catégorie « compteur » du JSON qui somme des valeurs sur tous les tours depuis le début de la partie. Mets en avant les cumuls remarquables de technologies et centaures échangés avec d'autres joueurs, de planètes prises à ou par un joueur et de lieutenants achetés ou perdus, sans réciter les valeurs comme un tableau.
     - Conserve un ton vivant, accrocheur et divertissant.
 
     RÈGLES D'INTERPRÉTATION STRICTES DES OUTLIERS DANS LE JSON :
