@@ -747,18 +747,16 @@ def generer_structs_json_joueurs_avancees(dernier_tour_dict):
 # ==========================================
 # APPEL IA AVEC PROMPT PÉDAGOGIQUE INTÉGRÉ
 # ==========================================
-def generer_textes_ia(joueurs_json_str, tour_id):
+def generer_gazette_ia(joueurs_json_str, tour_id):
     if not GEMINI_API_KEY:
         print("[IA] Clé API Gemini manquante.")
-        return "📰 **Gazette (Fallback)**", "⚔️ **Rapport Militaire (Fallback)**"
+        return "📰 **Gazette (Fallback)**"
 
     print(f"[IA] Génération de la gazette pour le Tour {tour_id} à partir du JSON...")
     model = genai.GenerativeModel('gemini-3.6-flash') # Modèle actif standardisé
 
     prompt = f"""
-    En tant que rédacteur en chef galactique pour le Tour {tour_id}, analyse les données JSON ci-dessous décrivant chaque joueur pour rédiger :
-    1. Une gazette narrative vivante et immersive.
-    2. Un rapport militaire percutant.
+    En tant que rédacteur en chef galactique pour le Tour {tour_id}, analyse les données JSON ci-dessous décrivant chaque joueur pour rédiger une gazette narrative vivante et immersive.
 
     RÈGLES DE RÉDACTION ÉDITORIALES STRICTES :
     - **Interdiction formelle d'énumérer des chiffres ou des indicateurs bruts** de manière soporifique. Transforme les données en faits d'armes, en rumeurs de taverne spatiale ou en faits divers galactiques.
@@ -780,8 +778,7 @@ def generer_textes_ia(joueurs_json_str, tour_id):
     """
 
     response = model.generate_content(prompt)
-    texte_complet = response.text
-    return texte_complet, texte_complet
+    return response.text
 
 def envoyer_messages_multiples_discord(liste_messages):
     if not DISCORD_WEBHOOK_URL:
@@ -902,12 +899,11 @@ def main():
     print("[Succès] Structures JSON narratives écrites dans la feuille 'narrative_outputs'.")
 
     # 4. APPEL IA AVEC LE FICHIER JSON EN INPUT
-    texte_gazette, texte_militaire = generer_textes_ia(payload_complet_str, tours[-1])
-    print("\n[IA] Textes générés avec succès à partir du JSON.")
+    texte_gazette = generer_gazette_ia(payload_complet_str, tours[-1])
+    print("\n[IA] Gazette générée avec succès à partir du JSON.")
     envoyer_messages_multiples_discord([
-        f"🚀 **[Tour {tours[-1]}] Analyse terminée. Diffusion des bulletins de l'IA...**",
-        texte_gazette,
-        texte_militaire
+        f"🚀 **[Tour {tours[-1]}] Analyse terminée. Diffusion de la gazette...**",
+        texte_gazette
     ])
     print("--- PIPELINE TERMINÉ AVEC SUCCÈS ---")
 
