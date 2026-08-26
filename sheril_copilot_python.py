@@ -407,7 +407,7 @@ def get_latest_turns_and_download():
         return []
 
     print(f"[Étape 0] Dernier tour détecté -> Tour {dernier_tour_trouve}.")
-    tours_a_traiter = [t for t in range(max(PREMIER_TOUR, dernier_tour_trouve - 2), dernier_tour_trouve + 1)]
+    tours_a_traiter = list(range(PREMIER_TOUR, dernier_tour_trouve + 1))
 
     os.makedirs(BASE_EXTRACT_DIR, exist_ok=True)
     tours_valides = []
@@ -465,6 +465,8 @@ def parse_tour_files(tour_id):
                                 if "dons_emis" not in joueurs_dict[jid_emetteur]:
                                     joueurs_dict[jid_emetteur]["dons_emis"] = []
                                 joueurs_dict[jid_emetteur]["dons_emis"].append(don)
+                                if don.get("type_don", "").startswith("Technologie:"):
+                                    joueurs_dict[jid_emetteur]["technologies_donnees"] += 1
                     continue
 
                 for jid, r in metric_values.items():
@@ -511,7 +513,8 @@ def init_player_structure(tour_id, jid, nom, race):
         "tour_id": int(tour_id), "joueur_id": str(jid), "nom": nom, "race": race,
         "planetes": 0, "centaures": 0.0, "pop": 0.0, "puissance": 0.0, "reputation": 0.0,
         "tech_points": 0.0, "rayonnement_pts": 0.0, "popvs_pts": 0.0, "offensive_pts": 0.0,
-        "alliance": "Aucune", "combats": {}, "dons_emis": [], "dons_recus": {}, "classements": {}, "indicateurs_derives": {}
+        "alliance": "Aucune", "combats": {}, "dons_emis": [], "technologies_donnees": 0,
+        "dons_recus": {}, "classements": {}, "indicateurs_derives": {}
     }
 
 def compiler_indicateurs_avances_et_seuils(historique_tours_dict):
@@ -541,6 +544,21 @@ def compiler_indicateurs_avances_et_seuils(historique_tours_dict):
 
     dernier_tour_id = max(historique_tours_dict.keys())
     dernier_tour_dict = historique_tours_dict[dernier_tour_id]
+    technologies_donnees_par_joueur = {}
+    for tour_dict in historique_tours_dict.values():
+        for jid, data in tour_dict.items():
+            technologies_donnees_par_joueur[jid] = (
+                technologies_donnees_par_joueur.get(jid, 0)
+                + int(data.get("technologies_donnees", 0))
+            )
+
+    for jid, data in dernier_tour_dict.items():
+        data["technologies_donnees"] = technologies_donnees_par_joueur.get(jid, 0)
+        print(
+            f"[LOG] Commandant {data.get('nom', f'#{jid}')} ({jid}) : "
+            f"{data['technologies_donnees']} technologie(s) donnée(s) cumulée(s)"
+        )
+
     metriques_cibles = ["puissance", "planetes", "pop", "centaures", "reputation", "tech_valeur", "rayonnement_pts", "popvs_pts", "offensive_valeur", "impact"]
     moyennes_globales = {m: float(df[df["tour_id"] == dernier_tour_id][m].mean()) for m in metriques_cibles}
 
@@ -788,7 +806,7 @@ def main():
             float(data.get("pop", 0.0)), float(data.get("puissance", 0.0)),
             float(data.get("reputation", 0.0)), float(data.get("tech_points", 0.0)),
             float(data.get("rayonnement_pts", 0.0)), float(data.get("popvs_pts", 0.0)),
-            float(data.get("offensive_pts", 0.0))
+            float(data.get("offensive_pts", 0.0)), int(data.get("technologies_donnees", 0))
         ])
     save_to_sheet(sh, "RAW_DATA", parsed_rows, ["Tour_ID", "Joueur_ID", "Nom", "Race", "Planetes", "Centaures", "Pop", "Puissance", "Reputation", "Tech_Points", "Rayonnement_Pts", "PopVS_Pts", "Offensive_Pts"])
 
@@ -822,14 +840,14 @@ def main():
             int(ind_militaires.get("attaques_subies", 0)), float(ind_militaires.get("indice_tension", 0.0)),
             float(ind_militaires.get("ratio_offensif", 0.0)), str(ind_geo.get("alliance", "Aucune")),
             float(ind_geo.get("est_isole", 1.0)), str(data.get("stat_alerte", "stable")),
-            cibles_str, dons_str
+            cibles_str, dons_str, int(data.get("technologies_donnees", 0))
         ])
         analysis_rows.append(row_data)
 
     headers = ["Tour_ID", "Joueur_ID", "Nom", "Race"]
     for met in ["Puis", "Plan", "Pop", "Cent", "Rep", "Tech", "Ray", "PopVS", "Off", "Impact"]:
         headers.extend([f"{met}_Prog", f"{met}_Deriv", f"{met}_Std", f"{met}_EcartMoy", f"{met}_ATH", f"{met}_ATL", f"{met}_ToursHaut"])
-    headers.extend(["Mil_BalanceProj", "Mil_AttAtq", "Mil_AttSub", "Mil_IndiceTension", "Mil_RatioOff", "Geo_Alliance", "Geo_EstIsole", "Statut_Alerte", "Commandants_Attaques", "Dons_Emis"])
+    headers.extend(["Mil_BalanceProj", "Mil_AttAtq", "Mil_AttSub", "Mil_IndiceTension", "Mil_RatioOff", "Geo_Alliance", "Geo_EstIsole", "Statut_Alerte", "Commandants_Attaques", "Dons_Emis", "Technologies_Donnees"])
 
     save_to_sheet(sh, "analysis_results", analysis_rows, headers)
 
@@ -848,7 +866,7 @@ def main():
     print("[Succès] Structures JSON narratives écrites dans la feuille 'narrative_outputs'.")
 
     # 4. APPEL IA AVEC LE FICHIER JSON EN INPUT
-    texte_gazette, texte_militaire = generer_textes_ia(payload_complet_str, tours[-1])
+    #texte_gazette, texte_militaire = generer_textes_ia(payload_complet_str, tours[-1])
     print("\n[IA] Textes générés avec succès à partir du JSON.")
     envoyer_messages_multiples_discord([
         f"🚀 **[Tour {tours[-1]}] Analyse terminée. Diffusion des bulletins de l'IA...**",
