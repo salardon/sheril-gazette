@@ -12,11 +12,12 @@ def parse_evt(soup, tour_id):
 
     regex_argent = re.compile(r"Le commandant\s+(.+?)\s*\((\d+)\)\s+as?\s+transmis\s+([\d\s\.,\xA0]+)\s+au commandant\s+(.+?)\s*\((\d+)\)", re.IGNORECASE)
     regex_centaures = re.compile(r"Le commandant\s+(.+?)\s*\((\d+)\)\s+as?\s+transmis\s+([\d\s\.,\xA0]+)\s+centaures?\s+au commandant\s+(.+?)\s*\((\d+)\)", re.IGNORECASE)
-    regex_tech = re.compile(r"Le commandant\s+(.+?)\s*\((\d+)\)\s+as?\s+transmis\s+la technologie\s+(.+?)\s+au commandant\s+(.+?)\s*\((\d+)\)", re.IGNORECASE)
+    regex_tech = re.compile(r"Le commandant\s+(.+?)\s*\((\d+)\)\s+a\s+transmis\s+(?:la\s+)?technologie\s+(.+?)\s+(?:au|à)\s+commandant\s+(.+?)\s*\((\d+)\)", re.IGNORECASE)
     regex_achat_lieutenant = re.compile(r"(?:Le commandant\s+)?(.+?)\s*\((\d+)\)\s+vient d[’']enr[oô]ler le lieutenant\s+(.+?)\s+pour la somme de\s+([\d\s\.,\xA0\u202f]+)", re.IGNORECASE)
     regex_mort_lieutenant = re.compile(r"Le lieutenant\s+(.+?)\s+du commandant\s+(.+?)\s*\((\d+)\)\s+vient trouver la mort lors d'un combat", re.IGNORECASE)
 
     for ligne in lignes:
+        ligne = re.sub(r"\s+", " ", ligne).strip()
         match_achat = regex_achat_lieutenant.search(ligne)
         if match_achat:
             nom_commandant, id_commandant, nom_lieutenant, montant_str = match_achat.groups()
