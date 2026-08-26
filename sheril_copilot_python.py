@@ -367,6 +367,18 @@ PREMIER_TOUR = 1
 BASE_ZIP_URL = "https://sheril.pbem-france.net/stats/statsT{NUM}.zip"
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "https://discord.com/api/webhooks/1540810441402351706/Ph8kE6VVnlLKxkXwIEo_4Y7iMNNK9B0-P-WKsckOcbsInVN6UX_4ADIWtgZ3Mq3dqVEY")
 
+SEUILS_COMPTEURS = {
+    "cumul_technologies_donnees": [10, 25, 50, 100],
+    "cumul_technologies_recues": [10, 25, 50, 100],
+    "cumul_centaures_donnes": [10000, 50000, 100000],
+    "cumul_centaures_recus": [10000, 50000, 100000],
+    "cumul_planetes_prises": [10, 30, 50, 100],
+    "cumul_planetes_perdues": [10, 30, 50, 100],
+    "cumul_lieutenants_achetes": [10, 25, 50],
+    "cumul_lieutenants_morts": [10, 30, 50],
+    "cumul_centaures_depenses_lieutenants": [10000, 50000, 100000]
+}
+
 # Clé API Gemini
 GEMINI_API_KEY = userdata.get("GEMINI_API_KEY")
 if GEMINI_API_KEY:
@@ -556,14 +568,11 @@ def compiler_indicateurs_avances_et_seuils(historique_tours_dict):
                 "offensive_valeur": float(data.get("offensive_pts", 0.0)), "impact": impact_val
             })
 
-    df = pd.DataFrame(lignes_globales)
-    if df.empty:
-        return historique_tours_dict
-
     dernier_tour_id = max(historique_tours_dict.keys())
     dernier_tour_dict = historique_tours_dict[dernier_tour_id]
     compteurs_cumules = {}
-    for tour_dict in historique_tours_dict.values():
+    cumuls_par_tour = {}
+    for tour_id, tour_dict in sorted(historique_tours_dict.items()):
         for jid, data in tour_dict.items():
             compteurs = compteurs_cumules.setdefault(jid, {})
             for nom_compteur in [
@@ -574,9 +583,37 @@ def compiler_indicateurs_avances_et_seuils(historique_tours_dict):
                 "cumul_centaures_depenses_lieutenants"
             ]:
                 compteurs[nom_compteur] = compteurs.get(nom_compteur, 0) + data.get(nom_compteur, 0)
+        cumuls_par_tour[tour_id] = {
+            jid: valeurs.copy() for jid, valeurs in compteurs_cumules.items()
+        }
+
+    tours_tries = sorted(cumuls_par_tour)
+    seuils_par_joueur = {jid: [] for jid in dernier_tour_dict}
+    if len(tours_tries) >= 2:
+        tour_precedent = cumuls_par_tour[tours_tries[-2]]
+        tour_actuel = cumuls_par_tour[tours_tries[-1]]
+        for jid, compteurs_actuels in tour_actuel.items():
+            compteurs_precedents = tour_precedent.get(jid, {})
+            for nom_compteur, seuils in SEUILS_COMPTEURS.items():
+                ancienne_valeur = compteurs_precedents.get(nom_compteur, 0)
+                nouvelle_valeur = compteurs_actuels.get(nom_compteur, 0)
+                for seuil in seuils:
+                    if ancienne_valeur < seuil <= nouvelle_valeur:
+                        seuils_par_joueur.setdefault(jid, []).append({
+                            "compteur": nom_compteur,
+                            "seuil": seuil,
+                            "ancienne_valeur": ancienne_valeur,
+                            "nouvelle_valeur": nouvelle_valeur,
+                            "libelle": f"Seuil {seuil} atteint pour {nom_compteur}"
+                        })
 
     for jid, data in dernier_tour_dict.items():
         data.update(compteurs_cumules.get(jid, {}))
+        data["seuils_franchis"] = seuils_par_joueur.get(jid, [])
+
+    df = pd.DataFrame(lignes_globales)
+    if df.empty:
+        return dernier_tour_dict
 
     metriques_cibles = ["puissance", "planetes", "pop", "centaures", "reputation", "tech_valeur", "rayonnement_pts", "popvs_pts", "offensive_valeur", "impact"]
     moyennes_globales = {m: float(df[df["tour_id"] == dernier_tour_id][m].mean()) for m in metriques_cibles}
@@ -732,6 +769,7 @@ def generer_structs_json_joueurs_avancees(dernier_tour_dict):
                 "cumul_lieutenants_morts": int(data.get("cumul_lieutenants_morts", 0)),
                 "cumul_centaures_depenses_lieutenants": float(data.get("cumul_centaures_depenses_lieutenants", 0.0))
             },
+            "seuils_franchis": data.get("seuils_franchis", []),
             "outliers": outliers,
             "interactions": {
                 "combats_recus": combats_recus,
@@ -763,6 +801,7 @@ def generer_gazette_ia(joueurs_json_str, tour_id):
     - **Bannissement absolu du jargon technique et mathématique** : Ne mentionne jamais explicitement les concepts de mathématiques, de statistiques, d'algorithmes, de dérivées, d'écarts types, d'all-time high ou d'Isolation Forest. Tout doit être raconté par le prisme de la vie des peuples et des ambitions des dirigeants.
     - inclus les rubriques: edito, nouvelles, tops et flops, brèves et rumeurs, horoscope et humeur des races en évitant les répétitions entre chaque rubrique
     - Les rubriques « tops et flops » et « brèves et rumeurs » doivent aussi s'appuyer explicitement sur les valeurs de la catégorie « compteur » du JSON qui somme des valeurs sur tous les tours depuis le début de la partie. Mets en avant les cumuls remarquables de technologies et centaures échangés avec d'autres joueurs, de lieutenants achetés ou perdus et plus particulièrement du total de planètes prises à un joueur ou perdues, sans réciter les valeurs comme un tableau.
+    - La catégorie « seuils_franchis » contient uniquement les seuils nouvellement atteints pendant le dernier tour. Utilise-les comme des faits marquants dans les rubriques « nouvelles », « tops et flops » et « brèves et rumeurs », sans afficher les noms techniques des compteurs.
     - Conserve un ton vivant, accrocheur et divertissant.
 
     RÈGLES D'INTERPRÉTATION STRICTES DES OUTLIERS DANS LE JSON :
