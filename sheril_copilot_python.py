@@ -7,6 +7,19 @@ Original file is located at
     https://colab.research.google.com/drive/1vJIEHib557yDTb_166N5gaEudlMrK3cz
 """
 
+# Changement effectué depuis VS Code pour vérifier la chaîne VS Code > GitHub > Google Colab.
+import os
+
+repo_path = "/content/sheril-gazette"
+
+if not os.path.exists(repo_path):
+    !git clone https://github.com/salardon/sheril-gazette.git
+else:
+    %cd /content/sheril-gazette
+    !git pull origin main
+
+os.chdir(repo_path)
+
 # Commented out IPython magic to ensure Python compatibility.
 # %%writefile config_parsers.py
 # import re
