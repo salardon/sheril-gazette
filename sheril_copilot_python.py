@@ -457,6 +457,22 @@ def parse_tour_files(tour_id):
                                 joueurs_dict[jid_emetteur]["dons_emis"].append(don)
                                 if don.get("type_don", "").startswith("Technologie:"):
                                     joueurs_dict[jid_emetteur]["technologies_donnees"] += 1
+                                    jid_receveur = str(don.get("receveur"))
+                                    if jid_receveur and jid_receveur != "None":
+                                        if jid_receveur not in joueurs_dict:
+                                            joueurs_dict[jid_receveur] = init_player_structure(
+                                                tour_id, jid_receveur, don.get("receveur_nom", "-"), "-"
+                                            )
+                                        joueurs_dict[jid_receveur]["technologies_recues"] += 1
+                                elif don.get("type_don") == "Centaures":
+                                    joueurs_dict[jid_emetteur]["centaures_donnes"] += float(don.get("montant", 0.0))
+                                    jid_receveur = str(don.get("receveur"))
+                                    if jid_receveur and jid_receveur != "None":
+                                        if jid_receveur not in joueurs_dict:
+                                            joueurs_dict[jid_receveur] = init_player_structure(
+                                                tour_id, jid_receveur, don.get("receveur_nom", "-"), "-"
+                                            )
+                                        joueurs_dict[jid_receveur]["centaures_recus"] += float(don.get("montant", 0.0))
                     continue
 
                 for jid, r in metric_values.items():
@@ -485,6 +501,8 @@ def parse_tour_files(tour_id):
                     elif file_lower == "combats.htm":
                         if "combats" in r:
                             joueurs_dict[jid]["combats"] = r["combats"]
+                            joueurs_dict[jid]["planetes_prises"] = int(r["combats"].get("planetes_prises", 0))
+                            joueurs_dict[jid]["planetes_perdues"] = int(r["combats"].get("planetes_perdues", 0))
                     elif file_lower in ["alliances.htm", "alliance.htm"]:
                         if "alliance" in r:
                             joueurs_dict[jid]["alliance"] = str(r["alliance"])
@@ -504,6 +522,9 @@ def init_player_structure(tour_id, jid, nom, race):
         "planetes": 0, "centaures": 0.0, "pop": 0.0, "puissance": 0.0, "reputation": 0.0,
         "tech_points": 0.0, "rayonnement_pts": 0.0, "popvs_pts": 0.0, "offensive_pts": 0.0,
         "alliance": "Aucune", "combats": {}, "dons_emis": [], "technologies_donnees": 0,
+        "technologies_recues": 0,
+        "centaures_donnes": 0.0, "centaures_recus": 0.0,
+        "planetes_prises": 0, "planetes_perdues": 0,
         "dons_recus": {}, "classements": {}, "indicateurs_derives": {}
     }
 
@@ -535,15 +556,31 @@ def compiler_indicateurs_avances_et_seuils(historique_tours_dict):
     dernier_tour_id = max(historique_tours_dict.keys())
     dernier_tour_dict = historique_tours_dict[dernier_tour_id]
     technologies_donnees_par_joueur = {}
+    centaures_donnes_par_joueur = {}
+    centaures_recus_par_joueur = {}
+    planetes_prises_par_joueur = {}
+    planetes_perdues_par_joueur = {}
     for tour_dict in historique_tours_dict.values():
         for jid, data in tour_dict.items():
             technologies_donnees_par_joueur[jid] = (
                 technologies_donnees_par_joueur.get(jid, 0)
                 + int(data.get("technologies_donnees", 0))
             )
+            centaures_donnes_par_joueur[jid] = centaures_donnes_par_joueur.get(jid, 0.0) + float(data.get("centaures_donnes", 0.0))
+            centaures_recus_par_joueur[jid] = centaures_recus_par_joueur.get(jid, 0.0) + float(data.get("centaures_recus", 0.0))
+            planetes_prises_par_joueur[jid] = planetes_prises_par_joueur.get(jid, 0) + int(data.get("planetes_prises", 0))
+            planetes_perdues_par_joueur[jid] = planetes_perdues_par_joueur.get(jid, 0) + int(data.get("planetes_perdues", 0))
 
     for jid, data in dernier_tour_dict.items():
         data["technologies_donnees"] = technologies_donnees_par_joueur.get(jid, 0)
+        data["technologies_recues"] = sum(
+            int(tour_dict.get(jid, {}).get("technologies_recues", 0))
+            for tour_dict in historique_tours_dict.values()
+        )
+        data["centaures_donnes"] = centaures_donnes_par_joueur.get(jid, 0.0)
+        data["centaures_recus"] = centaures_recus_par_joueur.get(jid, 0.0)
+        data["planetes_prises"] = planetes_prises_par_joueur.get(jid, 0)
+        data["planetes_perdues"] = planetes_perdues_par_joueur.get(jid, 0)
         print(
             f"[LOG] Commandant {data.get('nom', f'#{jid}')} ({jid}) : "
             f"{data['technologies_donnees']} technologie(s) donnée(s) cumulée(s)"
@@ -830,14 +867,17 @@ def main():
             int(ind_militaires.get("attaques_subies", 0)), float(ind_militaires.get("indice_tension", 0.0)),
             float(ind_militaires.get("ratio_offensif", 0.0)), str(ind_geo.get("alliance", "Aucune")),
             float(ind_geo.get("est_isole", 1.0)), str(data.get("stat_alerte", "stable")),
-            cibles_str, dons_str, int(data.get("technologies_donnees", 0))
+            cibles_str, dons_str, int(data.get("technologies_donnees", 0)),
+            int(data.get("technologies_recues", 0)), float(data.get("centaures_donnes", 0.0)),
+            float(data.get("centaures_recus", 0.0)), int(data.get("planetes_prises", 0)),
+            int(data.get("planetes_perdues", 0))
         ])
         analysis_rows.append(row_data)
 
     headers = ["Tour_ID", "Joueur_ID", "Nom", "Race"]
     for met in ["Puis", "Plan", "Pop", "Cent", "Rep", "Tech", "Ray", "PopVS", "Off", "Impact"]:
         headers.extend([f"{met}_Prog", f"{met}_Deriv", f"{met}_Std", f"{met}_EcartMoy", f"{met}_ATH", f"{met}_ATL", f"{met}_ToursHaut"])
-    headers.extend(["Mil_BalanceProj", "Mil_AttAtq", "Mil_AttSub", "Mil_IndiceTension", "Mil_RatioOff", "Geo_Alliance", "Geo_EstIsole", "Statut_Alerte", "Commandants_Attaques", "Dons_Emis", "Technologies_Donnees"])
+    headers.extend(["Mil_BalanceProj", "Mil_AttAtq", "Mil_AttSub", "Mil_IndiceTension", "Mil_RatioOff", "Geo_Alliance", "Geo_EstIsole", "Statut_Alerte", "Commandants_Attaques", "Dons_Emis", "Technologies_Donnees", "Technologies_Recues", "Centaures_Donnes", "Centaures_Recus", "Planetes_Prises", "Planetes_Perdues"])
 
     save_to_sheet(sh, "analysis_results", analysis_rows, headers)
 

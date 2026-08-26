@@ -11,6 +11,7 @@ def parse_evt(soup, tour_id):
         lignes = [m.get_text() for m in messages]
 
     regex_argent = re.compile(r"Le commandant\s+(.+?)\s*\((\d+)\)\s+as?\s+transmis\s+([\d\s\.,\xA0]+)\s+au commandant\s+(.+?)\s*\((\d+)\)", re.IGNORECASE)
+    regex_centaures = re.compile(r"Le commandant\s+(.+?)\s*\((\d+)\)\s+as?\s+transmis\s+([\d\s\.,\xA0]+)\s+centaures?\s+au commandant\s+(.+?)\s*\((\d+)\)", re.IGNORECASE)
     regex_tech = re.compile(r"Le commandant\s+(.+?)\s*\((\d+)\)\s+as?\s+transmis\s+la technologie\s+(.+?)\s+au commandant\s+(.+?)\s*\((\d+)\)", re.IGNORECASE)
 
     for ligne in lignes:
@@ -21,6 +22,22 @@ def parse_evt(soup, tour_id):
                 "emetteur": str(id_emetteur), "emetteur_nom": nom_emetteur.strip(),
                 "receveur": str(id_receveur), "receveur_nom": nom_receveur.strip(),
                 "montant": 1.0, "type_don": f"Technologie: {nom_tech.strip()}"
+            })
+            continue
+
+        match_centaures = regex_centaures.search(ligne)
+        if match_centaures:
+            nom_emetteur, id_emetteur, montant_str, nom_receveur, id_receveur = match_centaures.groups()
+            montant_propre = montant_str.replace("\xa0", "").replace(" ", "").replace("\u202f", "").replace(",", ".")
+            try:
+                montant = float(montant_propre)
+            except ValueError:
+                montant = 0.0
+
+            dons_emis.append({
+                "emetteur": str(id_emetteur), "emetteur_nom": nom_emetteur.strip(),
+                "receveur": str(id_receveur), "receveur_nom": nom_receveur.strip(),
+                "montant": montant, "type_don": "Centaures"
             })
             continue
 
@@ -155,16 +172,19 @@ def parse_combats(soup, tour_id):
             for jid in [id_attaquant, id_defenseur]:
                 resultats.setdefault(jid, {"combats": {
                     "attaques_lancees": 0, "attaques_subies": 0,
-                    "cibles_attaquees": [], "planetes_perdues_adversaire": 0
+                    "cibles_attaquees": [], "planetes_perdues_adversaire": 0,
+                    "planetes_prises": 0, "planetes_perdues": 0
                 }})
 
             attaquant = resultats[id_attaquant]["combats"]
             defenseur = resultats[id_defenseur]["combats"]
             attaquant["attaques_lancees"] += 1
             attaquant["planetes_perdues_adversaire"] += planete_prise
+            attaquant["planetes_prises"] += planete_prise
             if id_defenseur not in attaquant["cibles_attaquees"]:
                 attaquant["cibles_attaquees"].append(id_defenseur)
             defenseur["attaques_subies"] += 1
+            defenseur["planetes_perdues"] += planete_prise
     return resultats
 
 
