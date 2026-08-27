@@ -1,6 +1,5 @@
 import re
 import unicodedata
-import unicodedata
 from bs4 import BeautifulSoup
 
 
@@ -17,11 +16,40 @@ def parse_evt(soup, tour_id):
     regex_tech = re.compile(r"Le commandant\s+(.+?)\s*\((\d+)\)\s+a\s+transmis\s+(?:la\s+)?technologie\s+(.+?)\s+(?:au|à)\s+commandant\s+(.+?)\s*\((\d+)\)", re.IGNORECASE)
     regex_achat_lieutenant = re.compile(r"(?:Le commandant\s+)?(.+?)\s*\((\d+)\)\s+vient d[’']enr[oô]ler le lieutenant\s+(.+?)\s+pour la somme de\s+([\d\s\.,\xA0\u202f]+)", re.IGNORECASE)
     regex_mort_lieutenant = re.compile(r"Le lieutenant\s+(.+?)\s+du commandant\s+(.+?)\s*\((\d+)\)\s+vient trouver la mort lors d'un combat", re.IGNORECASE)
+    regex_vol_techno_rate = re.compile(
+        r"La cour(?:s)?\s+de justice de\s+(.+?)\s+a intercept[eé]\s+un vol techno\s+du commandant\s+(.+?)\s*\((\d+)\)\s+contre\s+(.+?)\s*\((\d+)\)",
+        re.IGNORECASE
+    )
+    regex_cession_planete = re.compile(
+        r"Le commandant\s+(.+?)\s*\((\d+)\)\s+a?s?\s+transmis\s+les?\s+plan[eè]tes?\s+de son syst[eè]me\s+(.+?)\s*\(([^)]+)\)\s+au commandant\s+(.+?)\s*\((\d+)\)",
+        re.IGNORECASE
+    )
 
     for ligne in lignes:
         ligne = unicodedata.normalize("NFKC", ligne)
         ligne = unicodedata.normalize("NFKC", ligne)
         ligne = re.sub(r"\s+", " ", ligne).strip()
+        match_vol = regex_vol_techno_rate.search(ligne)
+        if match_vol:
+            nom_justice, nom_attaquant, id_attaquant, nom_cible, id_cible = match_vol.groups()
+            dons_emis.append({
+                "emetteur": str(id_attaquant), "emetteur_nom": nom_attaquant.strip(),
+                "receveur": str(id_cible), "receveur_nom": nom_cible.strip(),
+                "nom_justice": nom_justice.strip(), "type_don": "Vol_Techno_Rate",
+                "status": "echec_intercepte"
+            })
+            continue
+
+        match_cession = regex_cession_planete.search(ligne)
+        if match_cession:
+            nom_donneur, id_donneur, nom_systeme, coordonnees, nom_receveur, id_receveur = match_cession.groups()
+            dons_emis.append({
+                "emetteur": str(id_donneur), "emetteur_nom": nom_donneur.strip(),
+                "receveur": str(id_receveur), "receveur_nom": nom_receveur.strip(),
+                "systeme": f"{nom_systeme.strip()}({coordonnees.strip()})",
+                "type_don": "Cession_Planete"
+            })
+            continue
         match_achat = regex_achat_lieutenant.search(ligne)
         if match_achat:
             nom_commandant, id_commandant, nom_lieutenant, montant_str = match_achat.groups()
@@ -205,7 +233,8 @@ def parse_combats(soup, tour_id):
                 resultats.setdefault(jid, {"combats": {
                     "attaques_lancees": 0, "attaques_subies": 0,
                     "cibles_attaquees": [], "planetes_perdues_adversaire": 0,
-                    "planetes_prises": 0, "planetes_perdues": 0, "opposants": []
+                    "planetes_prises": 0, "planetes_perdues": 0,
+                    "opposants": [], "evenements": []
                 }})
 
             attaquant = resultats[id_attaquant]["combats"]
@@ -219,10 +248,18 @@ def parse_combats(soup, tour_id):
                 attaquant["cibles_attaquees"].append(id_defenseur)
             if nom_defenseur and nom_defenseur not in attaquant["opposants"]:
                 attaquant["opposants"].append(nom_defenseur)
+            attaquant["evenements"].append({
+                "type": "combat", "role": "attaquant", "opposant": nom_defenseur,
+                "attaques": 1, "planetes_prises": planete_prise
+            })
             defenseur["attaques_subies"] += 1
             defenseur["planetes_perdues"] += planete_prise
             if nom_attaquant and nom_attaquant not in defenseur["opposants"]:
                 defenseur["opposants"].append(nom_attaquant)
+            defenseur["evenements"].append({
+                "type": "combat", "role": "defenseur", "opposant": nom_attaquant,
+                "attaques": 1, "planetes_perdues": planete_prise
+            })
     return resultats
 
 

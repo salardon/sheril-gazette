@@ -485,7 +485,23 @@ def parse_tour_files(tour_id):
                                 categorie_evenement = "dons"
                                 if don.get("type_don") in ["Achat_Lieutenant", "Mort_Lieutenant"]:
                                     categorie_evenement = "lieutenants"
-                                joueurs_dict[jid_emetteur]["evenements_du_tour"][categorie_evenement].append(don.copy())
+                                elif don.get("type_don") in ["Vol_Techno_Rate", "Cession_Planete"]:
+                                    categorie_evenement = "alliances"
+                                if don.get("type_don") == "Vol_Techno_Rate":
+                                    evenement_emetteur = {
+                                        "type": "vol_techno_rate", "role": "auteur",
+                                        "cible": don.get("receveur_nom"), "status": don.get("status", "echec_intercepte")
+                                    }
+                                elif don.get("type_don") == "Cession_Planete":
+                                    evenement_emetteur = {
+                                        "type": "cession_planete", "role": "donneur",
+                                        "beneficiaire": don.get("receveur_nom"), "systeme": don.get("systeme")
+                                    }
+                                else:
+                                    evenement_emetteur = don.copy()
+                                joueurs_dict[jid_emetteur]["evenements_du_tour"][categorie_evenement].append(evenement_emetteur)
+                                if don.get("type_don") in ["Vol_Techno_Rate", "Cession_Planete"]:
+                                    joueurs_dict[jid_emetteur]["interactions_directes"] += 1
                                 if don.get("type_don", "").startswith("Technologie:"):
                                     joueurs_dict[jid_emetteur]["cumul_technologies_donnees"] += 1
                                     jid_receveur = str(don.get("receveur"))
@@ -496,6 +512,7 @@ def parse_tour_files(tour_id):
                                             )
                                         joueurs_dict[jid_receveur]["cumul_technologies_recues"] += 1
                                         joueurs_dict[jid_receveur]["evenements_du_tour"]["dons"].append({**don, "role": "receveur"})
+                                        joueurs_dict[jid_receveur]["interactions_directes"] += 1
                                 elif don.get("type_don") == "Centaures":
                                     joueurs_dict[jid_emetteur]["cumul_centaures_donnes"] += float(don.get("montant", 0.0))
                                     jid_receveur = str(don.get("receveur"))
@@ -506,6 +523,27 @@ def parse_tour_files(tour_id):
                                             )
                                         joueurs_dict[jid_receveur]["cumul_centaures_recus"] += float(don.get("montant", 0.0))
                                         joueurs_dict[jid_receveur]["evenements_du_tour"]["dons"].append({**don, "role": "receveur"})
+                                        joueurs_dict[jid_receveur]["interactions_directes"] += 1
+                                elif don.get("type_don") == "Vol_Techno_Rate":
+                                    jid_cible = str(don.get("receveur"))
+                                    if jid_cible and jid_cible != "None":
+                                        if jid_cible not in joueurs_dict:
+                                            joueurs_dict[jid_cible] = init_player_structure(tour_id, jid_cible, don.get("receveur_nom", "-"), "-")
+                                        joueurs_dict[jid_cible]["evenements_du_tour"]["alliances"].append({
+                                            "type": "vol_techno_rate", "role": "cible", "auteur": don.get("emetteur_nom"),
+                                            "status": don.get("status", "echec_intercepte")
+                                        })
+                                        joueurs_dict[jid_cible]["interactions_directes"] += 1
+                                elif don.get("type_don") == "Cession_Planete":
+                                    jid_receveur = str(don.get("receveur"))
+                                    if jid_receveur and jid_receveur != "None":
+                                        if jid_receveur not in joueurs_dict:
+                                            joueurs_dict[jid_receveur] = init_player_structure(tour_id, jid_receveur, don.get("receveur_nom", "-"), "-")
+                                        joueurs_dict[jid_receveur]["evenements_du_tour"]["alliances"].append({
+                                            "type": "cession_planete", "role": "receveur", "donneur": don.get("emetteur_nom"),
+                                            "systeme": don.get("systeme")
+                                        })
+                                        joueurs_dict[jid_receveur]["interactions_directes"] += 1
                                 elif don.get("type_don") == "Achat_Lieutenant":
                                     joueurs_dict[jid_emetteur]["cumul_lieutenants_achetes"] += 1
                                     joueurs_dict[jid_emetteur]["cumul_centaures_depenses_lieutenants"] += float(don.get("montant", 0.0))
@@ -541,22 +579,9 @@ def parse_tour_files(tour_id):
                             joueurs_dict[jid]["combats"] = r["combats"]
                             joueurs_dict[jid]["cumul_planetes_prises"] = int(r["combats"].get("planetes_prises", 0))
                             joueurs_dict[jid]["cumul_planetes_perdues"] = int(r["combats"].get("planetes_perdues", 0))
-                            if r["combats"].get("attaques_lancees", 0):
-                                for opposant in r["combats"].get("opposants", ["Inconnu"]):
-                                    joueurs_dict[jid]["evenements_du_tour"]["combats"].append({
-                                    "type": "combat", "role": "attaquant",
-                                    "opposant": opposant,
-                                    "attaques": int(r["combats"].get("attaques_lancees", 0)),
-                                    "planetes_prises": int(r["combats"].get("planetes_prises", 0))
-                                    })
-                            if r["combats"].get("attaques_subies", 0):
-                                for opposant in r["combats"].get("opposants", ["Inconnu"]):
-                                    joueurs_dict[jid]["evenements_du_tour"]["combats"].append({
-                                    "type": "combat", "role": "defenseur",
-                                    "opposant": opposant,
-                                    "attaques": int(r["combats"].get("attaques_subies", 0)),
-                                    "planetes_perdues": int(r["combats"].get("planetes_perdues", 0))
-                                    })
+                            joueurs_dict[jid]["evenements_du_tour"]["combats"].extend(
+                                r["combats"].get("evenements", [])
+                            )
                     elif file_lower in ["alliances.htm", "alliance.htm"]:
                         if "alliance" in r:
                             joueurs_dict[jid]["alliance"] = str(r["alliance"])
@@ -582,7 +607,8 @@ def init_player_structure(tour_id, jid, nom, race):
         "cumul_lieutenants_achetes": 0, "cumul_lieutenants_morts": 0,
         "cumul_centaures_depenses_lieutenants": 0.0,
         "dons_recus": {}, "classements": {}, "indicateurs_derives": {},
-        "evenements_du_tour": {"combats": [], "dons": [], "lieutenants": [], "alliances": []}, "streaks": {}
+        "evenements_du_tour": {"combats": [], "dons": [], "lieutenants": [], "alliances": []},
+        "interactions_directes": 0, "streaks": {}
     }
 
 

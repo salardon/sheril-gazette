@@ -14,6 +14,7 @@ def enrichir_donnees_joueurs(joueurs_dict):
         attaques_subies = combats.get("attaques_subies", 0)
         cibles = combats.get("cibles_attaquees", [])
         total_engagements = attaques_lancees + attaques_subies
+        interactions_directes = int(data.get("interactions_directes", 0))
         indice_tension = float(total_engagements) / max(1, data.get("planetes", 1))
         planetes_conquises = combats.get("planetes_perdues_adversaire", 0)
         ratio_offensif = (
@@ -35,7 +36,7 @@ def enrichir_donnees_joueurs(joueurs_dict):
         nb_dons = dons.get("total_recu", 0)
         score_isolement = 1.0 if alliance == "Aucune" else 0.2
         facteur_connexions = (
-            len(cibles) * 0.15 + nb_dons * 0.2 + total_engagements * 0.05
+            len(cibles) * 0.15 + nb_dons * 0.2 + total_engagements * 0.05 + interactions_directes * 0.15
         )
         score_isolement = max(0.0, min(1.0, score_isolement - facteur_connexions))
 
