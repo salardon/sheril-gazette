@@ -1009,7 +1009,10 @@ def generer_gazette_ia(joueurs_json_str, tour_id):
     
     Voici les données brutes fournies dans le JSON pour ce tour :
     - **Indicateurs clés et variations** (Planètes, Puissance militaire, Technologie et rangs associés par rapport au tour précédent, impact).
-    - **Score d'isolement** (Plus il est élevé, plus le joueur est connecté et au cœur du jeu diplomatique. S'il est faible, le joueur est isolé, sans alliance ni interactions).
+    - **Score d'isolement (`est_isole`)** : Métrique de 0.0 à 1.0 (ATTENTION : plus le score est ÉLEVÉ, plus le joueur est ISOLÉ).
+    * 0.0 à 0.4 : Joueur très connecté, hyperactif diplomatiquement/militairement ou membre d'une alliance.
+    * 0.5 à 0.7 : Joueur en marge, conservant quelques rares contacts.
+    * 0.8 à 1.0 : Ermite ou paria galactique, sans alliance ni interactions (combats/dons).
     - **Mouvements politiques et militaires** (Changements d'alliances récents, achats ou morts de lieutenants).
     - **Interactions directes du tour** (Combats, victoires, défaites, dons et flux de ressources).
     - **Outliers du tour** (Anomalies statistiques calculées sur l'historique disponible jusqu'à ce tour {tour_id}).
