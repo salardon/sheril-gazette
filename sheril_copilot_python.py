@@ -801,7 +801,7 @@ Voici les données brutes que je te fournis pour ce tour :
 - Les interactions directes entre joueurs : les combats (attaques, victoires, défaites) et les dons/flux de ressources (pots-de-vin, rançons, aide humanitaire, pactes secrets).
 - Les 10 "outliers" (anomalies statistiques basées sur les écarts-types, moyennes, dérivées secondes et records all-time high).
 - Les séries en cours (streaks) et les seuils symboliques franchis.
-- Les compteurs historiques depuis le début de la partie (cumul des pertes, total des dons, etc. sur une échelle de 40-50 tours).
+- Les compteurs historiques (Cumul_) qui s'additionne chaque tour depuis le début de la partie (cumul des pertes, total des dons, cumul des centaures donnés ou reçus poru tous les tours, etc. sur une échelle de 40-50 tours).
 
 Pour garantir une gazette de qualité, respecte impérativement ces directives de rédaction :
 
