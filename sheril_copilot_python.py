@@ -1172,7 +1172,7 @@ def main():
 
     print("\n[LOG] Contenu du JSON généré pour les joueurs :")
     payload_complet_str = json.dumps(joueurs_json_list, ensure_ascii=False, indent=2)
-    print(payload_complet_str)
+    #print(payload_complet_str)
 
     narrative_rows = []
     for j_json in joueurs_json_list:
@@ -1182,12 +1182,13 @@ def main():
     print("[Succès] Structures JSON narratives écrites dans la feuille 'narrative_outputs'.")
 
     # 4. APPEL IA AVEC LE FICHIER JSON EN INPUT
-    # texte_gazette = generer_gazette_ia(payload_complet_str, tours[-1])
-    # print("\n[IA] Gazette générée avec succès à partir du JSON.")
-    # envoyer_messages_multiples_discord([
-    #     f"🚀 **[Tour {tours[-1]}] Analyse terminée. Diffusion de la gazette...**",
-    #     texte_gazette
-    # ])
+    
+    print("\n[IA] Gazette lancée à partir du JSON.")
+    texte_gazette = generer_gazette_ia(payload_complet_str, tours[-1])
+    envoyer_messages_multiples_discord([
+        f"🚀 **[Tour {tours[-1]}] Analyse terminée. Diffusion de la gazette...**",
+        texte_gazette
+    ])
     print("--- PIPELINE TERMINÉ AVEC SUCCÈS ---")
 
 if __name__ == "__main__":
