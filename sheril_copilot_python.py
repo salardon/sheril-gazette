@@ -482,7 +482,10 @@ def parse_tour_files(tour_id):
                                 if "dons_emis" not in joueurs_dict[jid_emetteur]:
                                     joueurs_dict[jid_emetteur]["dons_emis"] = []
                                 joueurs_dict[jid_emetteur]["dons_emis"].append(don)
-                                joueurs_dict[jid_emetteur]["evenements_du_tour"].append(don.copy())
+                                categorie_evenement = "dons"
+                                if don.get("type_don") in ["Achat_Lieutenant", "Mort_Lieutenant"]:
+                                    categorie_evenement = "lieutenants"
+                                joueurs_dict[jid_emetteur]["evenements_du_tour"][categorie_evenement].append(don.copy())
                                 if don.get("type_don", "").startswith("Technologie:"):
                                     joueurs_dict[jid_emetteur]["cumul_technologies_donnees"] += 1
                                     jid_receveur = str(don.get("receveur"))
@@ -492,7 +495,7 @@ def parse_tour_files(tour_id):
                                                 tour_id, jid_receveur, don.get("receveur_nom", "-"), "-"
                                             )
                                         joueurs_dict[jid_receveur]["cumul_technologies_recues"] += 1
-                                        joueurs_dict[jid_receveur]["evenements_du_tour"].append({**don, "role": "receveur"})
+                                        joueurs_dict[jid_receveur]["evenements_du_tour"]["dons"].append({**don, "role": "receveur"})
                                 elif don.get("type_don") == "Centaures":
                                     joueurs_dict[jid_emetteur]["cumul_centaures_donnes"] += float(don.get("montant", 0.0))
                                     jid_receveur = str(don.get("receveur"))
@@ -502,7 +505,7 @@ def parse_tour_files(tour_id):
                                                 tour_id, jid_receveur, don.get("receveur_nom", "-"), "-"
                                             )
                                         joueurs_dict[jid_receveur]["cumul_centaures_recus"] += float(don.get("montant", 0.0))
-                                        joueurs_dict[jid_receveur]["evenements_du_tour"].append({**don, "role": "receveur"})
+                                        joueurs_dict[jid_receveur]["evenements_du_tour"]["dons"].append({**don, "role": "receveur"})
                                 elif don.get("type_don") == "Achat_Lieutenant":
                                     joueurs_dict[jid_emetteur]["cumul_lieutenants_achetes"] += 1
                                     joueurs_dict[jid_emetteur]["cumul_centaures_depenses_lieutenants"] += float(don.get("montant", 0.0))
@@ -539,17 +542,21 @@ def parse_tour_files(tour_id):
                             joueurs_dict[jid]["cumul_planetes_prises"] = int(r["combats"].get("planetes_prises", 0))
                             joueurs_dict[jid]["cumul_planetes_perdues"] = int(r["combats"].get("planetes_perdues", 0))
                             if r["combats"].get("attaques_lancees", 0):
-                                joueurs_dict[jid]["evenements_du_tour"].append({
+                                for opposant in r["combats"].get("opposants", ["Inconnu"]):
+                                    joueurs_dict[jid]["evenements_du_tour"]["combats"].append({
                                     "type": "combat", "role": "attaquant",
+                                    "opposant": opposant,
                                     "attaques": int(r["combats"].get("attaques_lancees", 0)),
                                     "planetes_prises": int(r["combats"].get("planetes_prises", 0))
-                                })
+                                    })
                             if r["combats"].get("attaques_subies", 0):
-                                joueurs_dict[jid]["evenements_du_tour"].append({
+                                for opposant in r["combats"].get("opposants", ["Inconnu"]):
+                                    joueurs_dict[jid]["evenements_du_tour"]["combats"].append({
                                     "type": "combat", "role": "defenseur",
+                                    "opposant": opposant,
                                     "attaques": int(r["combats"].get("attaques_subies", 0)),
                                     "planetes_perdues": int(r["combats"].get("planetes_perdues", 0))
-                                })
+                                    })
                     elif file_lower in ["alliances.htm", "alliance.htm"]:
                         if "alliance" in r:
                             joueurs_dict[jid]["alliance"] = str(r["alliance"])
@@ -575,7 +582,7 @@ def init_player_structure(tour_id, jid, nom, race):
         "cumul_lieutenants_achetes": 0, "cumul_lieutenants_morts": 0,
         "cumul_centaures_depenses_lieutenants": 0.0,
         "dons_recus": {}, "classements": {}, "indicateurs_derives": {},
-        "evenements_du_tour": [], "streaks": {}
+        "evenements_du_tour": {"combats": [], "dons": [], "lieutenants": [], "alliances": []}, "streaks": {}
     }
 
 
@@ -602,6 +609,22 @@ def calculer_streaks(historique_tours_dict, jid, tour_actuel):
             return 0.0
         return float(valeur(tours[index], cle, 0.0) - valeur(tours[index - 1], cle, 0.0))
 
+    def streak_variation(cle):
+        derniere = variation(len(tours) - 1, cle)
+        if derniere == 0:
+            return 0, None
+        direction = 1 if derniere > 0 else -1
+        longueur = 0
+        for index in range(len(tours) - 1, 0, -1):
+            delta = variation(index, cle)
+            if delta == 0 or (delta > 0) != (direction > 0):
+                break
+            longueur += 1
+        return longueur, "hausse" if direction > 0 else "baisse"
+
+    streak_planetes, direction_planetes = streak_variation("planetes")
+    streak_centaures, direction_centaures = streak_variation("centaures")
+
     streaks = {
         "streak_sans_attaque": longueur_condition(
             lambda index: sum(valeur(tours[index], "combats", {}).get(key, 0) for key in ("attaques_lancees", "attaques_subies")) == 0
@@ -616,14 +639,10 @@ def calculer_streaks(historique_tours_dict, jid, tour_actuel):
             lambda index: valeur(tours[index], "cumul_centaures_donnes", 0) > 0
             or valeur(tours[index], "cumul_technologies_donnees", 0) > 0
         ),
-        "streak_variation_planetes": longueur_condition(
-            lambda index: index > 0 and variation(index, "planetes") != 0
-            and (variation(index, "planetes") > 0) == (variation(len(tours) - 1, "planetes") > 0)
-        ),
-        "streak_variation_centaures": longueur_condition(
-            lambda index: index > 0 and variation(index, "centaures") != 0
-            and (variation(index, "centaures") > 0) == (variation(len(tours) - 1, "centaures") > 0)
-        )
+        "streak_variation_planetes": streak_planetes,
+        "streak_variation_centaures": streak_centaures,
+        "streak_variation_planetes_tendance": direction_planetes,
+        "streak_variation_centaures_tendance": direction_centaures
     }
 
     def seconde_variation(index, cle):
@@ -917,6 +936,10 @@ def generer_structs_json_joueurs_avancees(dernier_tour_dict):
                 "valeur": float(data.get("tech_points", 0.0)),
                 "variation": variation(data, "tech_valeur"),
                 "rang": rang_technologie.get(jid)
+            },
+            "impact": {
+                "valeur": int(data.get("puissance", 0) - data.get("pop", 0) - data.get("centaures", 0)),
+                "variation": variation(data, "impact")
             }
         }
         for indicateur in indicateurs_clefs.values():
@@ -936,9 +959,13 @@ def generer_structs_json_joueurs_avancees(dernier_tour_dict):
         )[:5]
         series_encours = sorted(
             (
-                {"nom": nom, "longueur": longueur}
+                {
+                    "nom": nom,
+                    "longueur": longueur,
+                    **({"tendance": data["streaks"].get(f"{nom}_tendance")} if nom in ["streak_variation_planetes", "streak_variation_centaures"] else {})
+                }
                 for nom, longueur in data.get("streaks", {}).items()
-                if longueur > 0
+                if nom in STREAKS and isinstance(longueur, (int, float)) and longueur > 0
             ),
             key=lambda item: item["longueur"],
             reverse=True
@@ -947,6 +974,8 @@ def generer_structs_json_joueurs_avancees(dernier_tour_dict):
         structure_joueur = {
             "joueur": nom,
             "race": race,
+            "alliance": data.get("indicateurs_geopolitiques", {}).get("alliance", data.get("alliance", "Aucune")),
+            "isolement": float(data.get("indicateurs_geopolitiques", {}).get("est_isole", 1.0)),
             "indicateurs_clefs": indicateurs_clefs,
             "fait_marquant_outliers": outliers,
             "evenements_du_tour": data.get("evenements_du_tour", []),
@@ -955,7 +984,6 @@ def generer_structs_json_joueurs_avancees(dernier_tour_dict):
                 "compteurs_marquants": compteurs_marquants,
                 "series_encours": series_encours
             },
-            "impact": int(data.get("puissance", 0) - data.get("pop", 0) - data.get("centaures", 0))
         }
         joueurs_json_list.append(nettoyer(structure_joueur))
 
@@ -980,7 +1008,7 @@ def generer_gazette_ia(joueurs_json_str, tour_id):
     Ton objectif est de rédiger l'édition du jour en direct de la galaxie. Tu ne connais pas le futur : tu te bases uniquement sur ce qui s'est passé depuis le Tour 1 jusqu'à ce Tour {tour_id}.
     
     Voici les données brutes fournies dans le JSON pour ce tour :
-    - **Indicateurs clés et variations** (Planètes, Puissance militaire, Technologie et rangs associés par rapport au tour précédent).
+    - **Indicateurs clés et variations** (Planètes, Puissance militaire, Technologie et rangs associés par rapport au tour précédent, impact).
     - **Score d'isolement** (Plus il est élevé, plus le joueur est connecté et au cœur du jeu diplomatique. S'il est faible, le joueur est isolé, sans alliance ni interactions).
     - **Mouvements politiques et militaires** (Changements d'alliances récents, achats ou morts de lieutenants).
     - **Interactions directes du tour** (Combats, victoires, défaites, dons et flux de ressources).

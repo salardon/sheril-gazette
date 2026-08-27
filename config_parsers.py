@@ -1,4 +1,6 @@
 import re
+import unicodedata
+import unicodedata
 from bs4 import BeautifulSoup
 
 
@@ -17,6 +19,8 @@ def parse_evt(soup, tour_id):
     regex_mort_lieutenant = re.compile(r"Le lieutenant\s+(.+?)\s+du commandant\s+(.+?)\s*\((\d+)\)\s+vient trouver la mort lors d'un combat", re.IGNORECASE)
 
     for ligne in lignes:
+        ligne = unicodedata.normalize("NFKC", ligne)
+        ligne = unicodedata.normalize("NFKC", ligne)
         ligne = re.sub(r"\s+", " ", ligne).strip()
         match_achat = regex_achat_lieutenant.search(ligne)
         if match_achat:
@@ -201,18 +205,24 @@ def parse_combats(soup, tour_id):
                 resultats.setdefault(jid, {"combats": {
                     "attaques_lancees": 0, "attaques_subies": 0,
                     "cibles_attaquees": [], "planetes_perdues_adversaire": 0,
-                    "planetes_prises": 0, "planetes_perdues": 0
+                    "planetes_prises": 0, "planetes_perdues": 0, "opposants": []
                 }})
 
             attaquant = resultats[id_attaquant]["combats"]
             defenseur = resultats[id_defenseur]["combats"]
+            nom_attaquant = re.sub(r"\s*\(\d+\)\s*$", "", cols[0].get_text(" ", strip=True)).strip()
+            nom_defenseur = re.sub(r"\s*\(\d+\)\s*$", "", cols[1].get_text(" ", strip=True)).strip()
             attaquant["attaques_lancees"] += 1
             attaquant["planetes_perdues_adversaire"] += planete_prise
             attaquant["planetes_prises"] += planete_prise
             if id_defenseur not in attaquant["cibles_attaquees"]:
                 attaquant["cibles_attaquees"].append(id_defenseur)
+            if nom_defenseur and nom_defenseur not in attaquant["opposants"]:
+                attaquant["opposants"].append(nom_defenseur)
             defenseur["attaques_subies"] += 1
             defenseur["planetes_perdues"] += planete_prise
+            if nom_attaquant and nom_attaquant not in defenseur["opposants"]:
+                defenseur["opposants"].append(nom_attaquant)
     return resultats
 
 
