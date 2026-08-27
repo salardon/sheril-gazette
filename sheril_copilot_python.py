@@ -379,6 +379,21 @@ SEUILS_COMPTEURS = {
     "cumul_centaures_depenses_lieutenants": [10000, 50000, 100000]
 }
 
+COMPTEURS_CUMULES = [
+    "cumul_technologies_donnees", "cumul_technologies_recues",
+    "cumul_centaures_donnes", "cumul_centaures_recus",
+    "cumul_planetes_prises", "cumul_planetes_perdues",
+    "cumul_lieutenants_achetes", "cumul_lieutenants_morts",
+    "cumul_centaures_depenses_lieutenants"
+]
+
+STREAKS = [
+    "streak_sans_attaque", "streak_avec_attaque", "streak_top1_pv_combat",
+    "streak_acceleration_pop", "streak_acceleration_rayonnement",
+    "streak_variation_planetes", "streak_variation_centaures",
+    "streak_achat_lieutenant", "streak_don_public"
+]
+
 # Clé API Gemini
 GEMINI_API_KEY = userdata.get("GEMINI_API_KEY")
 if GEMINI_API_KEY:
@@ -467,6 +482,7 @@ def parse_tour_files(tour_id):
                                 if "dons_emis" not in joueurs_dict[jid_emetteur]:
                                     joueurs_dict[jid_emetteur]["dons_emis"] = []
                                 joueurs_dict[jid_emetteur]["dons_emis"].append(don)
+                                joueurs_dict[jid_emetteur]["evenements_du_tour"].append(don.copy())
                                 if don.get("type_don", "").startswith("Technologie:"):
                                     joueurs_dict[jid_emetteur]["cumul_technologies_donnees"] += 1
                                     jid_receveur = str(don.get("receveur"))
@@ -476,6 +492,7 @@ def parse_tour_files(tour_id):
                                                 tour_id, jid_receveur, don.get("receveur_nom", "-"), "-"
                                             )
                                         joueurs_dict[jid_receveur]["cumul_technologies_recues"] += 1
+                                        joueurs_dict[jid_receveur]["evenements_du_tour"].append({**don, "role": "receveur"})
                                 elif don.get("type_don") == "Centaures":
                                     joueurs_dict[jid_emetteur]["cumul_centaures_donnes"] += float(don.get("montant", 0.0))
                                     jid_receveur = str(don.get("receveur"))
@@ -485,6 +502,7 @@ def parse_tour_files(tour_id):
                                                 tour_id, jid_receveur, don.get("receveur_nom", "-"), "-"
                                             )
                                         joueurs_dict[jid_receveur]["cumul_centaures_recus"] += float(don.get("montant", 0.0))
+                                        joueurs_dict[jid_receveur]["evenements_du_tour"].append({**don, "role": "receveur"})
                                 elif don.get("type_don") == "Achat_Lieutenant":
                                     joueurs_dict[jid_emetteur]["cumul_lieutenants_achetes"] += 1
                                     joueurs_dict[jid_emetteur]["cumul_centaures_depenses_lieutenants"] += float(don.get("montant", 0.0))
@@ -520,6 +538,18 @@ def parse_tour_files(tour_id):
                             joueurs_dict[jid]["combats"] = r["combats"]
                             joueurs_dict[jid]["cumul_planetes_prises"] = int(r["combats"].get("planetes_prises", 0))
                             joueurs_dict[jid]["cumul_planetes_perdues"] = int(r["combats"].get("planetes_perdues", 0))
+                            if r["combats"].get("attaques_lancees", 0):
+                                joueurs_dict[jid]["evenements_du_tour"].append({
+                                    "type": "combat", "role": "attaquant",
+                                    "attaques": int(r["combats"].get("attaques_lancees", 0)),
+                                    "planetes_prises": int(r["combats"].get("planetes_prises", 0))
+                                })
+                            if r["combats"].get("attaques_subies", 0):
+                                joueurs_dict[jid]["evenements_du_tour"].append({
+                                    "type": "combat", "role": "defenseur",
+                                    "attaques": int(r["combats"].get("attaques_subies", 0)),
+                                    "planetes_perdues": int(r["combats"].get("planetes_perdues", 0))
+                                })
                     elif file_lower in ["alliances.htm", "alliance.htm"]:
                         if "alliance" in r:
                             joueurs_dict[jid]["alliance"] = str(r["alliance"])
@@ -544,8 +574,98 @@ def init_player_structure(tour_id, jid, nom, race):
         "cumul_planetes_prises": 0, "cumul_planetes_perdues": 0,
         "cumul_lieutenants_achetes": 0, "cumul_lieutenants_morts": 0,
         "cumul_centaures_depenses_lieutenants": 0.0,
-        "dons_recus": {}, "classements": {}, "indicateurs_derives": {}
+        "dons_recus": {}, "classements": {}, "indicateurs_derives": {},
+        "evenements_du_tour": [], "streaks": {}
     }
+
+
+def calculer_streaks(historique_tours_dict, jid, tour_actuel):
+    """Calcule les séries en cours pour un joueur à partir de l'historique brut."""
+    tours = sorted(historique_tours_dict)
+    if not tours:
+        return {}
+
+    def valeur(tour_id, cle, default=0):
+        return historique_tours_dict[tour_id].get(jid, {}).get(cle, default)
+
+    def longueur_condition(condition):
+        longueur = 0
+        for index in range(len(tours) - 1, -1, -1):
+            if condition(index):
+                longueur += 1
+            else:
+                break
+        return longueur
+
+    def variation(index, cle):
+        if index == 0:
+            return 0.0
+        return float(valeur(tours[index], cle, 0.0) - valeur(tours[index - 1], cle, 0.0))
+
+    streaks = {
+        "streak_sans_attaque": longueur_condition(
+            lambda index: sum(valeur(tours[index], "combats", {}).get(key, 0) for key in ("attaques_lancees", "attaques_subies")) == 0
+        ),
+        "streak_avec_attaque": longueur_condition(
+            lambda index: sum(valeur(tours[index], "combats", {}).get(key, 0) for key in ("attaques_lancees", "attaques_subies")) > 0
+        ),
+        "streak_achat_lieutenant": longueur_condition(
+            lambda index: valeur(tours[index], "cumul_lieutenants_achetes", 0) > 0
+        ),
+        "streak_don_public": longueur_condition(
+            lambda index: valeur(tours[index], "cumul_centaures_donnes", 0) > 0
+            or valeur(tours[index], "cumul_technologies_donnees", 0) > 0
+        ),
+        "streak_variation_planetes": longueur_condition(
+            lambda index: index > 0 and variation(index, "planetes") != 0
+            and (variation(index, "planetes") > 0) == (variation(len(tours) - 1, "planetes") > 0)
+        ),
+        "streak_variation_centaures": longueur_condition(
+            lambda index: index > 0 and variation(index, "centaures") != 0
+            and (variation(index, "centaures") > 0) == (variation(len(tours) - 1, "centaures") > 0)
+        )
+    }
+
+    def seconde_variation(index, cle):
+        if index < 2:
+            return 0.0
+        return variation(index, cle) - variation(index - 1, cle)
+
+    for nom_streak, cle in (
+        ("streak_acceleration_pop", "pop"),
+        ("streak_acceleration_rayonnement", "rayonnement_pts")
+    ):
+        derniere = seconde_variation(len(tours) - 1, cle)
+        direction = 1 if derniere > 0 else -1 if derniere < 0 else 0
+        streaks[nom_streak] = longueur_condition(
+            lambda index, cle=cle, direction=direction: direction != 0
+            and seconde_variation(index, cle) * direction > 0
+        )
+
+    variations_puissance = {}
+    for index, tour_id in enumerate(tours):
+        for joueur_id in historique_tours_dict[tour_id]:
+            if index > 0:
+                variations_puissance[joueur_id, tour_id] = (
+                    float(historique_tours_dict[tour_id].get(joueur_id, {}).get("puissance", 0.0))
+                    - float(historique_tours_dict[tours[index - 1]].get(joueur_id, {}).get("puissance", 0.0))
+                )
+
+    top1_par_tour = {}
+    for index, tour_id in enumerate(tours):
+        if index == 0:
+            continue
+        candidats = {
+            joueur_id: variations_puissance.get((joueur_id, tour_id), 0.0)
+            for joueur_id in historique_tours_dict[tour_id]
+        }
+        if candidats:
+            top1_par_tour[tour_id] = max(candidats, key=candidats.get)
+    streaks["streak_top1_pv_combat"] = longueur_condition(
+        lambda index: tours[index] in top1_par_tour and top1_par_tour[tours[index]] == jid
+    )
+
+    return streaks
 
 def compiler_indicateurs_avances_et_seuils(historique_tours_dict):
     print("[Étape 2] Calcul des indicateurs dérivés et enrichissement militaire/géopolitique...")
@@ -610,6 +730,7 @@ def compiler_indicateurs_avances_et_seuils(historique_tours_dict):
     for jid, data in dernier_tour_dict.items():
         data.update(compteurs_cumules.get(jid, {}))
         data["seuils_franchis"] = seuils_par_joueur.get(jid, [])
+        data["streaks"] = calculer_streaks(historique_tours_dict, jid, dernier_tour_id)
 
     df = pd.DataFrame(lignes_globales)
     if df.empty:
@@ -665,6 +786,34 @@ from sklearn.ensemble import IsolationForest
 def generer_structs_json_joueurs_avancees(dernier_tour_dict):
     print("\n--- [DEBUG] Début de l'analyse avancée des outliers ---")
     joueurs_json_list = []
+
+    def variation(data, metrique):
+        return float(data.get("indicateurs_derives", {}).get(metrique, {}).get("progression", 0.0))
+
+    def rang(metrique):
+        valeurs = sorted(
+            ((float(data.get(metrique, 0.0)), jid) for jid, data in dernier_tour_dict.items()),
+            reverse=True
+        )
+        return {jid: index + 1 for index, (_, jid) in enumerate(valeurs)}
+
+    rang_puissance = rang("puissance")
+    rang_technologie = rang("tech_points")
+    compteurs = list(COMPTEURS_CUMULES)
+    moyennes_compteurs = {
+        compteur: float(np.mean([data.get(compteur, 0) for data in dernier_tour_dict.values()]))
+        for compteur in compteurs
+    }
+
+    def nettoyer(valeur):
+        if isinstance(valeur, dict):
+            return {
+                cle: nettoyee for cle, item in valeur.items()
+                if (nettoyee := nettoyer(item)) not in (None, {}, [], "")
+            }
+        if isinstance(valeur, list):
+            return [item for item in (nettoyer(item) for item in valeur) if item not in (None, {}, [], "")]
+        return valeur
 
     # Étape A : Transformation des indicateurs dérivés en DataFrame pour analyse globale
     lignes_analyse = []
@@ -741,7 +890,7 @@ def generer_structs_json_joueurs_avancees(dernier_tour_dict):
             outliers.append("Profil global atypique (Détecté par IA multi-critères)")
 
         # Dédoublonnage et limitation pour garder l'essence narrative
-        outliers = list(dict.fromkeys(outliers))[:10]
+        outliers = list(dict.fromkeys(outliers))[:5]
         print(f"  => Total outliers retenus pour {nom} : {len(outliers)}")
 
         # --- MODIFICATION ICI : Conversion des ID cibles en Noms ---
@@ -754,29 +903,61 @@ def generer_structs_json_joueurs_avancees(dernier_tour_dict):
 
         dons_financiers = [f"A versé un don vers {don.get('receveur_nom', 'inconnu')}" for don in data.get("dons_emis", [])]
 
+        indicateurs_clefs = {
+            "planetes": {
+                "valeur": int(data.get("planetes", 0)),
+                "variation": variation(data, "planetes")
+            },
+            "puissance": {
+                "valeur": float(data.get("puissance", 0.0)),
+                "variation": variation(data, "puissance"),
+                "rang": rang_puissance.get(jid)
+            },
+            "score_technologique": {
+                "valeur": float(data.get("tech_points", 0.0)),
+                "variation": variation(data, "tech_valeur"),
+                "rang": rang_technologie.get(jid)
+            }
+        }
+        for indicateur in indicateurs_clefs.values():
+            indicateur["variation_formatee"] = f"{indicateur['variation']:+g}"
+
+        compteurs_marquants = sorted(
+            (
+                {
+                    "nom": compteur,
+                    "valeur": data.get(compteur, 0),
+                    "ecart_moyenne": data.get(compteur, 0) - moyennes_compteurs[compteur]
+                }
+                for compteur in compteurs
+            ),
+            key=lambda item: abs(item["ecart_moyenne"]),
+            reverse=True
+        )[:5]
+        series_encours = sorted(
+            (
+                {"nom": nom, "longueur": longueur}
+                for nom, longueur in data.get("streaks", {}).items()
+                if longueur > 0
+            ),
+            key=lambda item: item["longueur"],
+            reverse=True
+        )[:3]
+
         structure_joueur = {
             "joueur": nom,
             "race": race,
-            "impact": int(data.get("puissance", 0) - data.get("pop", 0) - data.get("centaures", 0)),
-            "compteur": {
-                "cumul_technologies_donnees": int(data.get("cumul_technologies_donnees", 0)),
-                "cumul_technologies_recues": int(data.get("cumul_technologies_recues", 0)),
-                "cumul_centaures_donnes": float(data.get("cumul_centaures_donnes", 0.0)),
-                "cumul_centaures_recus": float(data.get("cumul_centaures_recus", 0.0)),
-                "cumul_planetes_prises": int(data.get("cumul_planetes_prises", 0)),
-                "cumul_planetes_perdues": int(data.get("cumul_planetes_perdues", 0)),
-                "cumul_lieutenants_achetes": int(data.get("cumul_lieutenants_achetes", 0)),
-                "cumul_lieutenants_morts": int(data.get("cumul_lieutenants_morts", 0)),
-                "cumul_centaures_depenses_lieutenants": float(data.get("cumul_centaures_depenses_lieutenants", 0.0))
+            "indicateurs_clefs": indicateurs_clefs,
+            "fait_marquant_outliers": outliers,
+            "evenements_du_tour": data.get("evenements_du_tour", []),
+            "historique_et_seuils": {
+                "seuils_franchis_ce_tour": data.get("seuils_franchis", []),
+                "compteurs_marquants": compteurs_marquants,
+                "series_encours": series_encours
             },
-            "seuils_franchis": data.get("seuils_franchis", []),
-            "outliers": outliers,
-            "interactions": {
-                "combats_recus": combats_recus,
-                "dons_financiers": dons_financiers
-            }
+            "impact": int(data.get("puissance", 0) - data.get("pop", 0) - data.get("centaures", 0))
         }
-        joueurs_json_list.append(structure_joueur)
+        joueurs_json_list.append(nettoyer(structure_joueur))
 
     print("\n--- [DEBUG] Fin de l'analyse avancée ---\n")
     return joueurs_json_list
@@ -946,14 +1127,15 @@ def main():
             float(data.get("cumul_centaures_recus", 0.0)), int(data.get("cumul_planetes_prises", 0)),
             int(data.get("cumul_planetes_perdues", 0)), int(data.get("cumul_lieutenants_achetes", 0)),
             int(data.get("cumul_lieutenants_morts", 0)),
-            float(data.get("cumul_centaures_depenses_lieutenants", 0.0))
+            float(data.get("cumul_centaures_depenses_lieutenants", 0.0)),
+            *[int(data.get(streak, 0)) for streak in STREAKS]
         ])
         analysis_rows.append(row_data)
 
     headers = ["Tour_ID", "Joueur_ID", "Nom", "Race"]
     for met in ["Puis", "Plan", "Pop", "Cent", "Rep", "Tech", "Ray", "PopVS", "Off", "Impact"]:
         headers.extend([f"{met}_Prog", f"{met}_Deriv", f"{met}_Std", f"{met}_EcartMoy", f"{met}_ATH", f"{met}_ATL", f"{met}_ToursHaut"])
-    headers.extend(["Mil_BalanceProj", "Mil_AttAtq", "Mil_AttSub", "Mil_IndiceTension", "Mil_RatioOff", "Geo_Alliance", "Geo_EstIsole", "Statut_Alerte", "Commandants_Attaques", "Dons_Emis", "Cumul_Technologies_Donnees", "Cumul_Technologies_Recues", "Cumul_Centaures_Donnes", "Cumul_Centaures_Recus", "Cumul_Planetes_Prises", "Cumul_Planetes_Perdues", "Cumul_Lieutenants_Achetes", "Cumul_Lieutenants_Morts", "Cumul_Centaures_Depenses_Lieutenants"])
+    headers.extend(["Mil_BalanceProj", "Mil_AttAtq", "Mil_AttSub", "Mil_IndiceTension", "Mil_RatioOff", "Geo_Alliance", "Geo_EstIsole", "Statut_Alerte", "Commandants_Attaques", "Dons_Emis", "Cumul_Technologies_Donnees", "Cumul_Technologies_Recues", "Cumul_Centaures_Donnes", "Cumul_Centaures_Recus", "Cumul_Planetes_Prises", "Cumul_Planetes_Perdues", "Cumul_Lieutenants_Achetes", "Cumul_Lieutenants_Morts", "Cumul_Centaures_Depenses_Lieutenants", *[streak.title() for streak in STREAKS]])
 
     save_to_sheet(sh, "analysis_results", analysis_rows, headers)
 
