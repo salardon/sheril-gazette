@@ -1261,18 +1261,18 @@ def generer_gazette_ia(joueurs_json_str, tour_id):
     - `matrice_relations_historiques` : volumes cumulés et fréquences de toutes les paires depuis le Tour 1.
     - `indices_complots_suspects` : alertes de convergence militaire ou transaction occulte. (Si la liste est `[]`, n'invente aucune alerte).
 
-    ### Directives de Rédaction & Ton
-    1. **Raconter au présent :** Actualité brûlante du Tour {tour_id}. Utilise l'historique récent sans jamais faire allusion au futur.
-    2. **Journalisme paranoïaque :** Plonge dans la `matrice_relations_historiques` et les `indices_complots_suspects`. Si une alerte est présente, **tu DOIS en faire le sujet principal de ta Une ou de ta chronique géopolitique**. Accuse publiquement les coupables de pacte occulte (interdiction d'invoquer le hasard). Si `indices_complots_suspects` est vide, ne fabrique pas de faux soupçons.
-    3. **Exploitation globale :** Raconte les combats, analyse les flux de ressources (dons, racket) et raille les scores d'isolement.
+    ### Directives de Rédaction & Ton Global
+    1. **Le ton général (Léger, moqueur et théâtral) :** La gazette doit avant tout être drôle, piquante et vivante. Traite les joueurs comme des stars de téléréalité galactique.
+    2. **Raconter au présent :** Actualité brûlante du Tour {tour_id}. Utilise l'historique récent sans jamais faire allusion au futur.
+    3. **Exploitation globale :** Raconte les combats, analyse les flux de ressources (dons, racket) et raille les scores d'isolement (les ermites vs les papillons mondains).
     4. **Inclusivité :** Varie les angles et cite au moins un tiers des commandants (via articles ou brèves).
 
     ### Structure de la Gazette :
-    1. **La Une (Titre choc & édito) :** L'événement majeur, le choc militaire ou le complot du tour.
-    2. **Chronique des Armes et du Sang :** Récit des affrontements, pertes de territoires et sorts des lieutenants.
-    3. **Le Carnet Noir & Blanc (Dons, Alliances & Réseau) :** Analyse de la carte politique, des scores d'isolement et des alliances de fait repérées via la matrice historique.
-    4. **Le Baromètre des Streaks et des Records :** Focus sur les séries en cours et les seuils franchis.
-    5. **Les Brèves du Vide :** Mentions éclair (1-2 phrases max) pour couvrir le reste des commandants.
+    1. **La Une (Titre choc & édito) :** L'événement le plus marquant du tour, raconté avec un humour mordant.
+    2. **Chronique des Armes et du Sang :** Récit épique et moqueur des affrontements et pertes de territoires.
+    3. **Le Carnet Noir & Le Bureau des Insinuations (section parano qui traite Dons, Réseau & Complots) :** La grande section géopolitique fusionnée ! Analyse les scores d'isolement, les flux de ressources et les mariages de raison, puis enfile ton costume de journaliste d'investigation pour dénoncer les pactes occultes et les collusions repérées via la `matrice_relations_historiques` et `indices_complots_suspects`. (Si aucune alerte n'est présente, invente une théorie du complot absurde et inoffensive).
+    4. **L'Horoscope Galactique des Streaks :** Utilise les séries en cours (`series_encours`), les `historique_et_seuils` et les `indices_complots_suspects` pour rédiger des prévisions astrologiques et divinatoires absurdes, piquantes et menaçantes pour le prochain tour de ces joueurs ("Sous le signe de la défaite consécutive, préparez vos cartons...", "Jupiter rétrograde sur vos flottes").
+    5. **Les Brèves du Vide :** Mentions éclair (1-2 phrases max, très piquantes) pour couvrir le reste des commandants.
 
     ### RÈGLES DE RÉDACTION STRICTES :
     - **Pas de chiffres bruts** : Transforme-les en récits ou rumeurs.
