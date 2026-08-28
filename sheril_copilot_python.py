@@ -715,6 +715,95 @@ def calculer_streaks(historique_tours_dict, jid, tour_actuel):
 
     return streaks
 
+
+def construire_matrice_relations_historiques(historique_tours_dict):
+    """Agrège toutes les relations dirigées enregistrées depuis le premier tour."""
+    relations = {}
+    noms_joueurs = {}
+    total_tours = len(historique_tours_dict)
+
+    def relation(jid_a, jid_b):
+        if jid_a == jid_b:
+            return None
+        cle = tuple(sorted((str(jid_a), str(jid_b))))
+        return relations.setdefault(cle, {
+            "combats_donnes": 0,
+            "combats_subis": 0,
+            "ressources_donnees": 0.0,
+            "tours_actifs": set()
+        })
+
+    for tour_id, joueurs in sorted(historique_tours_dict.items()):
+        for jid, data in joueurs.items():
+            jid = str(jid)
+            nom = data.get("nom")
+            if nom and nom != "-":
+                noms_joueurs[jid] = nom
+
+        for jid, data in joueurs.items():
+            jid = str(jid)
+            combats = data.get("combats", {})
+            for cible_id in combats.get("cibles_attaquees", []):
+                cible_id = str(cible_id)
+                rel = relation(jid, cible_id)
+                if rel is None:
+                    continue
+                joueur_1, joueur_2 = sorted((jid, cible_id))
+                if jid == joueur_1:
+                    rel["combats_donnes"] += 1
+                else:
+                    rel["combats_subis"] += 1
+                rel["tours_actifs"].add(tour_id)
+
+            for don in data.get("dons_emis", []):
+                receveur = don.get("receveur")
+                if receveur is None:
+                    continue
+                receveur = str(receveur)
+                rel = relation(jid, receveur)
+                if rel is None:
+                    continue
+                montant = don.get("montant", 0.0)
+                if don.get("type_don", "").startswith("Technologie:"):
+                    montant = 1.0
+                elif don.get("type_don") == "Cession_Planete":
+                    montant = float(don.get("nombre", 1))
+                try:
+                    rel["ressources_donnees"] += float(montant)
+                except (TypeError, ValueError):
+                    pass
+                rel["tours_actifs"].add(tour_id)
+
+    def frequence(relation_data):
+        interactions = (
+            relation_data["combats_donnes"]
+            + relation_data["combats_subis"]
+            + relation_data["ressources_donnees"]
+        )
+        tours_actifs = len(relation_data["tours_actifs"])
+        ratio_tours = tours_actifs / max(1, total_tours)
+        if ratio_tours >= 0.75 or interactions >= max(10, total_tours * 2):
+            return "systématique"
+        if ratio_tours >= 0.5 or interactions >= max(5, total_tours):
+            return "élevée"
+        if ratio_tours >= 0.25 or interactions >= 3:
+            return "régulière"
+        if interactions >= 2:
+            return "occasionnelle"
+        return "rare"
+
+    matrice = []
+    for (jid_1, jid_2), relation_data in sorted(relations.items()):
+        matrice.append({
+            "joueur_1": noms_joueurs.get(jid_1, f"Joueur #{jid_1}"),
+            "joueur_2": noms_joueurs.get(jid_2, f"Joueur #{jid_2}"),
+            "combats_donnes": relation_data["combats_donnes"],
+            "combats_subis": relation_data["combats_subis"],
+            "ressources_donnees": round(relation_data["ressources_donnees"], 3),
+            "frequence_relation": frequence(relation_data)
+        })
+    return matrice
+
 def compiler_indicateurs_avances_et_seuils(historique_tours_dict):
     print("[Étape 2] Calcul des indicateurs dérivés et enrichissement militaire/géopolitique...")
     lignes_globales = []
@@ -1047,6 +1136,7 @@ def generer_gazette_ia(joueurs_json_str, tour_id):
     - **Outliers du tour** (Anomalies statistiques calculées sur l'historique disponible jusqu'à ce tour {tour_id}).
     - **Séries en cours (Streaks) et seuils symboliques** (Séries d'hégémonie ou de défaite actives au tour {tour_id}).
     - **Compteurs historiques** (Cumuls accumulés depuis le Tour 1 jusqu'à aujourd'hui).
+    - **Matrice des relations historiques** (`matrice_relations_historiques`) : toutes les paires de joueurs ayant eu au moins un combat ou un flux de ressources depuis le Tour 1, avec les volumes cumulés et une fréquence qualitative. Utilise-la pour révéler les rivalités, alliances de fait, dépendances et échanges réguliers.
     ### Le Renseignement Historique (Mémoire longue)
     - Tu disposes également d'un historique des tours précédents (ou d'une synthèse des relations passées). 
     - **Traque les schémas récurrents :** Une alliance secrète se cache souvent dans la durée. Si deux joueurs s'échangent des ressources de façon unilatérale depuis plusieurs tours avant de converger vers les mêmes cibles militaires, dénonce un pacte occulte de longue date.
@@ -1205,9 +1295,14 @@ def main():
 
     # 3. Génération, LOG et écriture JSON des joueurs dans 'narrative_outputs'
     joueurs_json_list = generer_structs_json_joueurs_avancees(dernier_tour_dict_enrichi)
+    matrice_relations_historiques = construire_matrice_relations_historiques(historique_tours)
 
     print("\n[LOG] Contenu du JSON généré pour les joueurs :")
-    payload_complet_str = json.dumps(joueurs_json_list, ensure_ascii=False, indent=2)
+    payload_complet = {
+        "joueurs": joueurs_json_list,
+        "matrice_relations_historiques": matrice_relations_historiques
+    }
+    payload_complet_str = json.dumps(payload_complet, ensure_ascii=False, indent=2)
     print(payload_complet_str)
 
     narrative_rows = []
