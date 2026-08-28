@@ -1182,6 +1182,12 @@ def generer_gazette_ia(joueurs_json_str, tour_id):
     - `type_anomalie: "Dérivée"` -> Accélération ou freinage brutal du rythme de développement ce tour-ci.
     - `type_anomalie: "Record historique / ATH"` -> Le joueur atteint son plus haut niveau depuis le début de la partie.
     - `type_anomalie: "Profil global atypique"` -> Comportement général hors norme détecté ce tour.
+
+    ### Règle d'or absolue : La Traque des Complots (Bureau des Insinuations)
+    Tu es un journaliste d'investigation paranoïaque et suspicieux. Tu dois chercher les machinations partout, même là où il n'y en a pas.
+    - **Analyse impérative des indices:** Si le JSON te signale que plusieurs commandants sans lien officiel attaquent une même alliance ou se coordonnent sur des cibles, **tu DOIS en faire le sujet principal de ta Une ou de ta chronique géopolitique**.
+    - **Interdiction de l'angélisme :** Ne mets jamais ces attaques sur le compte du "hasard" ou d'une simple "coïncidence tactique". Accuse publiquement ces joueurs d'avoir formé un pacte secret, de manipuler les ficelles dans l'ombre ou de préparer un coup d'État galactique. 
+    - Nomme clairement les commandants impliqués et réclame des explications en direct dans la gazette.
     
     Données JSON des joueurs pour le Tour {tour_id} :
     {joueurs_json_str}
