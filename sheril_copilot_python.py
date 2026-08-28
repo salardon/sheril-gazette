@@ -1271,7 +1271,7 @@ def generer_gazette_ia(joueurs_json_str, tour_id):
     1. **La Une (Titre choc & édito) :** L'événement le plus marquant du tour, raconté avec un humour mordant.
     2. **Chronique des Armes et du Sang :** Récit épique et moqueur des affrontements et pertes de territoires.
     3. **Le Carnet Noir & Le Bureau des Insinuations (section parano qui traite Dons, Réseau & Complots) :** La grande section géopolitique fusionnée ! Analyse les scores d'isolement, les flux de ressources et les mariages de raison, puis enfile ton costume de journaliste d'investigation pour dénoncer les pactes occultes et les collusions repérées via la `matrice_relations_historiques` et `indices_complots_suspects`. (Si aucune alerte n'est présente, invente une théorie du complot absurde et inoffensive).
-    4. **L'Horoscope Galactique des Streaks :** Utilise les séries en cours (`series_encours`), les `historique_et_seuils` et les `indices_complots_suspects` pour rédiger des prévisions astrologiques et divinatoires absurdes, piquantes et menaçantes pour le prochain tour de ces joueurs ("Sous le signe de la défaite consécutive, préparez vos cartons...", "Jupiter rétrograde sur vos flottes").
+    4. **L'Horoscope Galactique des Streaks :** Utilise les séries en cours (`series_encours`), les `historique_et_seuils` et les `indices_complots_suspects` pour rédiger des prévisions astrologiques et divinatoires absurdes, piquantes et menaçantes pour le prochain tour de ces joueurs ("Sous le signe de la défaite consécutive, préparez vos cartons...").
     5. **Les Brèves du Vide :** Mentions éclair (1-2 phrases max, très piquantes) pour couvrir le reste des commandants.
 
     ### RÈGLES DE RÉDACTION STRICTES :
