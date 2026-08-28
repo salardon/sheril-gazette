@@ -1137,11 +1137,12 @@ def generer_gazette_ia(joueurs_json_str, tour_id):
     - **Séries en cours (Streaks) et seuils symboliques** (Séries d'hégémonie ou de défaite actives au tour {tour_id}).
     - **Compteurs historiques** (Cumuls accumulés depuis le Tour 1 jusqu'à aujourd'hui).
     - **Matrice des relations historiques** (`matrice_relations_historiques`) : toutes les paires de joueurs ayant eu au moins un combat ou un flux de ressources depuis le Tour 1, avec les volumes cumulés et une fréquence qualitative. Utilise-la pour révéler les rivalités, alliances de fait, dépendances et échanges réguliers.
-    ### Le Renseignement Historique (Mémoire longue)
+    ### Le Renseignement Historique & Enquêtes de la Rédaction (Mémoire longue)
     - Tu disposes également d'un historique des tours précédents (ou d'une synthèse des relations passées). 
     - **Traque les schémas récurrents :** Une alliance secrète se cache souvent dans la durée. Si deux joueurs s'échangent des ressources de façon unilatérale depuis plusieurs tours avant de converger vers les mêmes cibles militaires, dénonce un pacte occulte de longue date.
     - **La mémoire des trahisons :** N'hésite pas à rappeler les vieilles promesses brisées ou les rancoeurs tenaces qui durent depuis 20 tours pour accentuer le côté théâtral de la gazette.
-    
+    - **Traque les collusions et les duos louches :** Plonge systématiquement dans la `matrice_relations_historiques`. Si deux commandants s'échangent régulièrement des ressources tout en coordonnant leurs frappes sur de tierces cibles (ou en s'évitant soigneusement), **tu dois lancer une rumeur de pacte occulte** dans l'un de tes articles. 
+    - **Exemple de ton attendu :** "Pourquoi Mabeur épargne-t-il systématiquement les flottes de Yoplait tout en piochant dans les mêmes réserves ? La rédaction enquête sur ce qu'il convient désormais d'appeler le syndicat de l'ombre."
     Pour garantir une gazette de qualité, respecte impérativement ces directives de rédaction :
     
     ### 1. Raconter l'histoire "au présent"
@@ -1165,7 +1166,7 @@ def generer_gazette_ia(joueurs_json_str, tour_id):
     ### Structure attendue de la gazette :
     1. **La Une (Titre choc & édito du Tour {tour_id}) :** L'événement majeur, le choc militaire ou la manœuvre politique incontournable de ce tour.
     2. **Chronique des Armes et du Sang :** Bilan des combats du tour, changements de territoires et pertes de lieutenants.
-    3. **Le Carnet Noir & Blanc (Dons, Alliances & Réseau) :** Analyse de la carte politique actuelle, des mouvements d'alliances et du niveau de connexion/isolement des joueurs.
+    3. **Le Carnet Noir & Blanc (Dons, Alliances & Réseau) :** Analyse de la carte politique actuelle, des mouvements d'alliances et du niveau d'isolement des joueurs ET **obligatoirement une chronique des "mariages arrangés" et des alliances de fait** repérées via la matrice des relations historiques.
     4. **Le Baromètre des Streaks et des Records :** Focus sur les séries en cours au Tour {tour_id} et les seuils franchis.
     5. **Les Brèves du Vide :** Piques rapides ou mentions éclair pour couvrir les autres joueurs (1 à 2 phrases max par joueur).
     
@@ -1173,6 +1174,7 @@ def generer_gazette_ia(joueurs_json_str, tour_id):
     - **Interdiction d'énumérer des chiffres bruts** : Ne liste pas les données. Transforme-les en récits, rumeurs de couloir ou commentaires politiques.
     - **Bannissement du jargon technique** : Interdiction de citer des termes comme *outliers*, *dérivée*, *isolation forest*, *score d'isolement*, *ATH*, *JSON* ou *métrique*. Traduis-les toujours en termes de jeu ou de lore (ex: "faible score d'isolement" -> "ermite reclus dans sa galaxie" / "fort score d'isolement" -> "plaque tournante de la diplomatie").
     - **Phrases courtes et percutantes** dans les brèves.
+    - **Obligation de soupçon :** Chaque édition de la gazette doit mentionner au moins un "couple" de joueurs suspecté de collusion, de racket ou de pacte secret en se basant sur la récurrence de leurs interactions dans la matrice historique.
     
     RÈGLES D'INTERPRÉTATION DES OUTLIERS (basés sur l'historique du Tour 1 au Tour {tour_id}) :
     - `type_anomalie: "Progression tour actuel"` -> Variation brutale sur ce seul tour.
