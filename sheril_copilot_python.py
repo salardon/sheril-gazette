@@ -1208,7 +1208,7 @@ def main():
 
     print("\n[LOG] Contenu du JSON généré pour les joueurs :")
     payload_complet_str = json.dumps(joueurs_json_list, ensure_ascii=False, indent=2)
-    #print(payload_complet_str)
+    print(payload_complet_str)
 
     narrative_rows = []
     for j_json in joueurs_json_list:
