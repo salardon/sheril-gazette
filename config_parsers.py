@@ -17,16 +17,15 @@ def parse_evt(soup, tour_id):
     regex_achat_lieutenant = re.compile(r"(?:Le commandant\s+)?(.+?)\s*\((\d+)\)\s+vient d[’']enr[oô]ler le lieutenant\s+(.+?)\s+pour la somme de\s+([\d\s\.,\xA0\u202f]+)", re.IGNORECASE)
     regex_mort_lieutenant = re.compile(r"Le lieutenant\s+(.+?)\s+du commandant\s+(.+?)\s*\((\d+)\)\s+vient trouver la mort lors d'un combat", re.IGNORECASE)
     regex_vol_techno_rate = re.compile(
-        r"La cour(?:s)?\s+de justice de\s+(.+?)\s+a intercept[eé]\s+un vol techno\s+du commandant\s+(.+?)\s*\((\d+)\)\s+contre\s+(.+?)\s*\((\d+)\)",
+        r"La cours?\s+de justice de\s+(.+?)\s+a\s+intercept[eé]\s+un vol techno\s+du commandant\s+(.+?)\s*\((\d+)\)\s+contre\s+(.+?)\s*\((\d+)\)",
         re.IGNORECASE
     )
     regex_cession_planete = re.compile(
-        r"Le commandant\s+(.+?)\s*\((\d+)\)\s+a?s?\s+transmis\s+les?\s+plan[eè]tes?\s+de son syst[eè]me\s+(.+?)\s*\(([^)]+)\)\s+au commandant\s+(.+?)\s*\((\d+)\)",
+        r"Le commandant\s+(.+?)\s*\((\d+)\)\s+a?s?\s+transmis\s+les?\s+(?:(\d+)\s+)?plan[eè]tes?\s+de son syst[eè]me\s+(.+?)\s*\(([^)]+)\)\s+au commandant\s+(.+?)\s*\((\d+)\)",
         re.IGNORECASE
     )
 
     for ligne in lignes:
-        ligne = unicodedata.normalize("NFKC", ligne)
         ligne = unicodedata.normalize("NFKC", ligne)
         ligne = re.sub(r"\s+", " ", ligne).strip()
         match_vol = regex_vol_techno_rate.search(ligne)
@@ -42,13 +41,16 @@ def parse_evt(soup, tour_id):
 
         match_cession = regex_cession_planete.search(ligne)
         if match_cession:
-            nom_donneur, id_donneur, nom_systeme, coordonnees, nom_receveur, id_receveur = match_cession.groups()
-            dons_emis.append({
+            nom_donneur, id_donneur, nombre, nom_systeme, coordonnees, nom_receveur, id_receveur = match_cession.groups()
+            evenement = {
                 "emetteur": str(id_donneur), "emetteur_nom": nom_donneur.strip(),
                 "receveur": str(id_receveur), "receveur_nom": nom_receveur.strip(),
                 "systeme": f"{nom_systeme.strip()}({coordonnees.strip()})",
                 "type_don": "Cession_Planete"
-            })
+            }
+            if nombre:
+                evenement["nombre"] = int(nombre)
+            dons_emis.append(evenement)
             continue
         match_achat = regex_achat_lieutenant.search(ligne)
         if match_achat:

@@ -497,6 +497,8 @@ def parse_tour_files(tour_id):
                                         "type": "cession_planete", "role": "donneur",
                                         "beneficiaire": don.get("receveur_nom"), "systeme": don.get("systeme")
                                     }
+                                    if "nombre" in don:
+                                        evenement_emetteur["nombre"] = don["nombre"]
                                 else:
                                     evenement_emetteur = don.copy()
                                 joueurs_dict[jid_emetteur]["evenements_du_tour"][categorie_evenement].append(evenement_emetteur)
@@ -542,6 +544,7 @@ def parse_tour_files(tour_id):
                                         joueurs_dict[jid_receveur]["evenements_du_tour"]["alliances"].append({
                                             "type": "cession_planete", "role": "receveur", "donneur": don.get("emetteur_nom"),
                                             "systeme": don.get("systeme")
+                                            , **({"nombre": don["nombre"]} if "nombre" in don else {})
                                         })
                                         joueurs_dict[jid_receveur]["interactions_directes"] += 1
                                 elif don.get("type_don") == "Achat_Lieutenant":
@@ -1044,6 +1047,10 @@ def generer_gazette_ia(joueurs_json_str, tour_id):
     - **Outliers du tour** (Anomalies statistiques calculées sur l'historique disponible jusqu'à ce tour {tour_id}).
     - **Séries en cours (Streaks) et seuils symboliques** (Séries d'hégémonie ou de défaite actives au tour {tour_id}).
     - **Compteurs historiques** (Cumuls accumulés depuis le Tour 1 jusqu'à aujourd'hui).
+    ### Le Renseignement Historique (Mémoire longue)
+    - Tu disposes également d'un historique des tours précédents (ou d'une synthèse des relations passées). 
+    - **Traque les schémas récurrents :** Une alliance secrète se cache souvent dans la durée. Si deux joueurs s'échangent des ressources de façon unilatérale depuis plusieurs tours avant de converger vers les mêmes cibles militaires, dénonce un pacte occulte de longue date.
+    - **La mémoire des trahisons :** N'hésite pas à rappeler les vieilles promesses brisées ou les rancoeurs tenaces qui durent depuis 20 tours pour accentuer le côté théâtral de la gazette.
     
     Pour garantir une gazette de qualité, respecte impérativement ces directives de rédaction :
     
