@@ -804,6 +804,137 @@ def construire_matrice_relations_historiques(historique_tours_dict):
         })
     return matrice
 
+
+def detecter_indices_complots_suspects(historique_tours_dict):
+    """Détecte les convergences militaires, flux suspects et recoupements."""
+    tours = sorted(historique_tours_dict)
+    if not tours:
+        return []
+
+    noms = {}
+    attaques = []
+    flux = {}
+
+    def nom_joueur(jid):
+        return noms.get(str(jid), f"Joueur #{jid}")
+
+    def seuil_flux(nombre_dons, tours_actifs, volume, total_tours):
+        ratio = tours_actifs / max(1, total_tours)
+        if nombre_dons >= 10 or (nombre_dons >= 5 and ratio >= 0.5) or volume >= 50000:
+            return "critique"
+        if nombre_dons >= 6 or (nombre_dons >= 3 and ratio >= 0.4) or volume >= 20000:
+            return "élevé"
+        if nombre_dons >= 3 or ratio >= 0.25 or volume >= 5000:
+            return "modéré"
+        return "faible"
+
+    for tour_id in tours:
+        joueurs = historique_tours_dict[tour_id]
+        for jid, data in joueurs.items():
+            jid = str(jid)
+            noms[jid] = data.get("nom", f"Joueur #{jid}")
+            for cible_id in data.get("combats", {}).get("cibles_attaquees", []):
+                attaques.append((tour_id, jid, str(cible_id)))
+
+            for don in data.get("dons_emis", []):
+                if don.get("type_don", "").startswith("Technologie:"):
+                    volume = 1.0
+                elif don.get("type_don") == "Centaures":
+                    volume = float(don.get("montant", 0.0))
+                elif don.get("type_don") == "Cession_Planete":
+                    volume = float(don.get("nombre", 1))
+                else:
+                    continue
+                receveur = don.get("receveur")
+                if receveur is None or str(receveur) == jid:
+                    continue
+                cle = (jid, str(receveur))
+                donnees_flux = flux.setdefault(cle, {"dons": 0, "volume": 0.0, "tours": set()})
+                donnees_flux["dons"] += 1
+                donnees_flux["volume"] += volume
+                donnees_flux["tours"].add(tour_id)
+
+    alertes = []
+
+    tours_observes = tours[-3:] if len(tours) >= 3 else tours
+    attaques_fenetre = [attaque for attaque in attaques if attaque[0] in tours_observes]
+    cibles_par_attaquant = {}
+    for tour_id, attaquant, cible in attaques_fenetre:
+        cibles_par_attaquant.setdefault(attaquant, {}).setdefault(cible, set()).add(tour_id)
+
+    convergences = {}
+    for attaquant, cibles in cibles_par_attaquant.items():
+        if any(
+            historique_tours_dict[tour_id].get(attaquant, {}).get("alliance", "Aucune") != "Aucune"
+            for tour_id in tours_observes
+        ):
+            continue
+        for cible, tours_cibles in cibles.items():
+            convergences.setdefault(("joueur", cible), {}).setdefault(attaquant, set()).update(tours_cibles)
+            for tour_id in tours_observes:
+                alliance = historique_tours_dict[tour_id].get(cible, {}).get("alliance", "Aucune")
+                if alliance != "Aucune":
+                    convergences.setdefault(("alliance", alliance), {}).setdefault(attaquant, set()).update(tours_cibles)
+
+    for (type_cible, cible), attaquants in convergences.items():
+        participants = [jid for jid, tours_cibles in attaquants.items() if len(tours_cibles) >= len(tours_observes)]
+        if len(participants) < 2:
+            continue
+        if type_cible == "alliance":
+            cible_texte = f"les membres de l'alliance publique '{cible}'"
+        else:
+            cible_texte = f"le commandant {nom_joueur(cible)}"
+        alertes.append({
+            "type_alerte": "Convergence d'agression sur une même alliance" if type_cible == "alliance" else "Convergence d'agression sur un même commandant",
+            "seuil_alerte": "élevé" if len(participants) >= 3 else "modéré",
+            "attaquants": [nom_joueur(jid) for jid in participants],
+            "cible": nom_joueur(cible) if type_cible == "joueur" else cible,
+            "tours_observes": len(tours_observes),
+            "description": f"Ces commandants sans lien officiel attaquent {cible_texte} depuis {len(tours_observes)} tour(s)."
+        })
+
+    alertes_transactions = []
+    for (donneur, receveur), donnees in flux.items():
+        seuil = seuil_flux(donnees["dons"], len(donnees["tours"]), donnees["volume"], len(tours))
+        if donnees["dons"] < 3 and donnees["volume"] < 5000:
+            continue
+        alertes_transactions.append({
+            "type_alerte": "Transaction occulte",
+            "seuil_alerte": seuil,
+            "membres_soupconnes": [nom_joueur(donneur), nom_joueur(receveur)],
+            "nombre_dons": donnees["dons"],
+            "tours_actifs": len(donnees["tours"]),
+            "volume_total": round(donnees["volume"], 3),
+            "description": (
+                f"{nom_joueur(donneur)} transfère régulièrement des ressources à {nom_joueur(receveur)} "
+                f"sur {len(donnees['tours'])} tour(s), pour un volume cumulé de {round(donnees['volume'], 3)}."
+            )
+        })
+    alertes.extend(alertes_transactions)
+
+    cibles_communes = {}
+    for (donneur, receveur), donnees in flux.items():
+        if donneur > receveur:
+            continue
+        cibles_donneur = {cible for _, attaquant, cible in attaques_fenetre if attaquant == donneur}
+        cibles_receveur = {cible for _, attaquant, cible in attaques_fenetre if attaquant == receveur}
+        cibles_communes[(donneur, receveur)] = cibles_donneur & cibles_receveur
+    for (donneur, receveur), cibles in cibles_communes.items():
+        if not cibles:
+            continue
+        donnees = flux[(donneur, receveur)]
+        alertes.append({
+            "type_alerte": "Alliance secrète suspectée",
+            "seuil_alerte": seuil_flux(donnees["dons"], len(donnees["tours"]), donnees["volume"], len(tours)),
+            "membres_soupconnes": [nom_joueur(donneur), nom_joueur(receveur)],
+            "cibles_communes": [nom_joueur(cible) for cible in sorted(cibles)],
+            "description": (
+                f"Ces deux commandants affichent un historique de dons répétés, tout en coordonnant "
+                f"leurs attaques sur des cibles communes au cours des {len(tours_observes)} derniers tours."
+            )
+        })
+    return alertes
+
 def compiler_indicateurs_avances_et_seuils(historique_tours_dict):
     print("[Étape 2] Calcul des indicateurs dérivés et enrichissement militaire/géopolitique...")
     lignes_globales = []
@@ -1125,18 +1256,26 @@ def generer_gazette_ia(joueurs_json_str, tour_id):
     
     Ton objectif est de rédiger l'édition du jour en direct de la galaxie. Tu ne connais pas le futur : tu te bases uniquement sur ce qui s'est passé depuis le Tour 1 jusqu'à ce Tour {tour_id}.
     
-    Voici les données brutes fournies dans le JSON pour ce tour :
-    - **Indicateurs clés et variations** (Planètes, Puissance militaire, Technologie et rangs associés par rapport au tour précédent, impact).
-    - **Score d'isolement (`est_isole`)** : Métrique de 0.0 à 1.0 (ATTENTION : plus le score est ÉLEVÉ, plus le joueur est ISOLÉ).
+    Voici les données structurées fournies dans le JSON global pour ce tour :
+    - `tour` : numéro du tour actuel.
+    - `joueurs` : liste des commandants. Chaque joueur contient `joueur`, `race`, `alliance`, `isolement`, `indicateurs_clefs`, `fait_marquant_outliers`, `evenements_du_tour` et `historique_et_seuils`.
+    - **Indicateurs clés et variations** (`indicateurs_clefs`) : planètes, puissance, score technologique, rangs associés et impact.
+    - **Score d'isolement (`isolement`)** : métrique de 0.0 à 1.0 (ATTENTION : plus le score est ÉLEVÉ, plus le joueur est ISOLÉ).
     * 0.0 à 0.4 : Joueur très connecté, hyperactif diplomatiquement/militairement ou membre d'une alliance.
     * 0.5 à 0.7 : Joueur en marge, conservant quelques rares contacts.
     * 0.8 à 1.0 : Ermite ou paria galactique, sans alliance ni interactions (combats/dons).
-    - **Mouvements politiques et militaires** (Changements d'alliances récents, achats ou morts de lieutenants).
-    - **Interactions directes du tour** (Combats, victoires, défaites, dons et flux de ressources).
-    - **Outliers du tour** (Anomalies statistiques calculées sur l'historique disponible jusqu'à ce tour {tour_id}).
-    - **Séries en cours (Streaks) et seuils symboliques** (Séries d'hégémonie ou de défaite actives au tour {tour_id}).
-    - **Compteurs historiques** (Cumuls accumulés depuis le Tour 1 jusqu'à aujourd'hui).
-    - **Matrice des relations historiques** (`matrice_relations_historiques`) : toutes les paires de joueurs ayant eu au moins un combat ou un flux de ressources depuis le Tour 1, avec les volumes cumulés et une fréquence qualitative. Utilise-la pour révéler les rivalités, alliances de fait, dépendances et échanges réguliers.
+    - **Événements directs** (`evenements_du_tour`) : combats structurés avec rôle, opposant, attaques et planètes prises/perdues; dons; événements de lieutenants; vols technologiques ratés; cessions de planètes.
+    - **Outliers du tour** (`fait_marquant_outliers`) : anomalies calculées sur l'historique disponible jusqu'à ce tour {tour_id}; ils sont déjà limités aux cinq éléments les plus significatifs.
+    - **Historique et seuils** (`historique_et_seuils`) : seuils franchis ce tour, cinq compteurs cumulés les plus éloignés de la moyenne et trois séries en cours les plus marquantes. Une série de variation indique aussi sa tendance (`hausse` ou `baisse`) lorsqu'elle est disponible.
+    - **Matrice des relations historiques** (`matrice_relations_historiques`) : clé globale contenant toutes les paires ayant eu au moins un combat ou un flux de ressources depuis le Tour 1, avec volumes cumulés et fréquence qualitative. Utilise-la pour révéler les rivalités, alliances de fait, dépendances et échanges réguliers.
+    - **Indices de complots suspects** (`indices_complots_suspects`) : clé globale contenant zéro ou plusieurs alertes de convergence militaire, transaction occulte ou alliance secrète suspectée. Si elle vaut `[]`, n'invente aucune alerte.
+
+    ### Contrat de lecture du JSON
+    - Les compteurs historiques se trouvent dans `joueurs[*].historique_et_seuils.compteurs_marquants` et représentent des cumuls depuis le Tour 1.
+    - Les seuils nouvellement atteints se trouvent dans `joueurs[*].historique_et_seuils.seuils_franchis_ce_tour` et concernent uniquement le tour actuel.
+    - Un événement de combat se trouve dans `joueurs[*].evenements_du_tour.combats` et mentionne le nom de l'`opposant`.
+    - Les événements de vol technologique raté ou de cession de planète se trouvent dans `joueurs[*].evenements_du_tour.alliances`.
+    - Les événements et alertes absents ou représentés par une liste vide ne doivent pas être remplacés par des faits inventés.
     ### Le Renseignement Historique & Enquêtes de la Rédaction (Mémoire longue)
     - Tu disposes également d'un historique des tours précédents (ou d'une synthèse des relations passées). 
     - **Traque les schémas récurrents :** Une alliance secrète se cache souvent dans la durée. Si deux joueurs s'échangent des ressources de façon unilatérale depuis plusieurs tours avant de converger vers les mêmes cibles militaires, dénonce un pacte occulte de longue date.
@@ -1147,12 +1286,12 @@ def generer_gazette_ia(joueurs_json_str, tour_id):
     
     ### 1. Raconter l'histoire "au présent"
     - Traite le Tour {tour_id} comme l'actualité brûlante. 
-    - Utilise l'historique disponible (`series_encours`, `seuils_franchis_ce_tour`, `compteurs_cumules`) pour rappeler le passé récent ("Depuis 5 tours déjà...", "Un record inégalé depuis le Tour 1 !").
+    - Utilise l'historique disponible (`historique_et_seuils.series_encours`, `historique_et_seuils.seuils_franchis_ce_tour`, `historique_et_seuils.compteurs_marquants`) pour rappeler le passé récent ("Depuis 5 tours déjà...", "Un record inégalé depuis le Tour 1 !").
     - Ne fais jamais allusion à une fin de partie ou à ce qui pourrait arriver après le Tour {tour_id}.
     
     ### 2. Exploiter les interactions, la politique et l'état-major
     - **Combats & Lieutenants :** Raconte les affrontements du tour. Célèbre les victoires, raille les défaites et commente la mort ou le recrutement des lieutenants avec dramaturgie.
-    - **Diplomatie & Alliances :** Exploite le `score_isolement` : moque les joueurs à faible score (les loups solitaires, fantômes ou parias) et braque les projecteurs sur ceux à fort score (les caméléons diplomatiques, chefs de blocs ou hyperactifs). Commente immédiatement les départs ou adhésions d'alliance (`mouvement_alliance`).
+    - **Diplomatie & Alliances :** Exploite `isolement` : moque les joueurs à score élevé (loups solitaires, fantômes ou parias) et braque les projecteurs sur ceux à score faible (caméléons diplomatiques, chefs de blocs ou hyperactifs). Utilise `alliance`, `matrice_relations_historiques`, `indices_complots_suspects` et les événements de `evenements_du_tour.alliances` lorsqu'ils existent.
     - **Dons et Flux :** Analyse la générosité, la soumission ou le racket derrière les transferts de ressources de ce tour.
     
     ### 3. Diversité des sujets et Inclusivité maximale
@@ -1174,7 +1313,7 @@ def generer_gazette_ia(joueurs_json_str, tour_id):
     - **Interdiction d'énumérer des chiffres bruts** : Ne liste pas les données. Transforme-les en récits, rumeurs de couloir ou commentaires politiques.
     - **Bannissement du jargon technique** : Interdiction de citer des termes comme *outliers*, *dérivée*, *isolation forest*, *score d'isolement*, *ATH*, *JSON* ou *métrique*. Traduis-les toujours en termes de jeu ou de lore (ex: "faible score d'isolement" -> "ermite reclus dans sa galaxie" / "fort score d'isolement" -> "plaque tournante de la diplomatie").
     - **Phrases courtes et percutantes** dans les brèves.
-    - **Obligation de soupçon :** Chaque édition de la gazette doit mentionner au moins un "couple" de joueurs suspecté de collusion, de racket ou de pacte secret en se basant sur la récurrence de leurs interactions dans la matrice historique.
+    - **Obligation de soupçon fondée sur les données :** Si `indices_complots_suspects` contient une alerte, mentionne au moins un couple ou groupe concerné et fonde l'accusation sur ses champs `type_alerte`, `seuil_alerte`, `membres_soupconnes`, `attaquants`, `description` et, le cas échéant, `cibles_communes`. Si la liste est vide, ne fabrique pas de soupçon.
     
     RÈGLES D'INTERPRÉTATION DES OUTLIERS (basés sur l'historique du Tour 1 au Tour {tour_id}) :
     - `type_anomalie: "Progression tour actuel"` -> Variation brutale sur ce seul tour.
@@ -1304,11 +1443,14 @@ def main():
     # 3. Génération, LOG et écriture JSON des joueurs dans 'narrative_outputs'
     joueurs_json_list = generer_structs_json_joueurs_avancees(dernier_tour_dict_enrichi)
     matrice_relations_historiques = construire_matrice_relations_historiques(historique_tours)
+    indices_complots_suspects = detecter_indices_complots_suspects(historique_tours)
 
     print("\n[LOG] Contenu du JSON généré pour les joueurs :")
     payload_complet = {
+        "tour": tours[-1],
         "joueurs": joueurs_json_list,
-        "matrice_relations_historiques": matrice_relations_historiques
+        "matrice_relations_historiques": matrice_relations_historiques,
+        "indices_complots_suspects": indices_complots_suspects
     }
     payload_complet_str = json.dumps(payload_complet, ensure_ascii=False, indent=2)
     print(payload_complet_str)
