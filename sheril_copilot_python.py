@@ -402,6 +402,14 @@ if GEMINI_API_KEY:
 else:
     print("[Avertissement] Aucune clé API Gemini trouvée.")
 
+# Clé API Claude. La valeur est facultative pour permettre de comparer
+# uniquement les fournisseurs dont les secrets sont configurés.
+try:
+    ANTHROPIC_API_KEY = userdata.get("ANTHROPIC_API_KEY")
+except Exception:
+    ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
+ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-5")
+
 def get_latest_turns_and_download():
     print("[Étape 0] Recherche incrémentale des tours disponibles...")
     session = requests.Session()
@@ -1243,15 +1251,8 @@ def generer_structs_json_joueurs_avancees(dernier_tour_dict):
 # ==========================================
 # APPEL IA AVEC PROMPT PÉDAGOGIQUE INTÉGRÉ
 # ==========================================
-def generer_gazette_ia(joueurs_json_str, tour_id):
-    if not GEMINI_API_KEY:
-        print("[IA] Clé API Gemini manquante.")
-        return "📰 **Gazette (Fallback)**"
-
-    print(f"[IA] Génération de la gazette pour le Tour {tour_id} à partir du JSON...")
-    model = genai.GenerativeModel('gemini-3.6-flash') # Modèle actif standardisé
-
-    prompt = f"""
+def construire_prompt_gazette(joueurs_json_str, tour_id):
+    return f"""
     Tu es le rédacteur en chef cynique, théâtral et passionné de "La Gazette Galactique", le journal officiel (mais délicieusement partial) de notre partie de jeu 4X (Tour {tour_id} en cours). 
     
     Ton objectif est de rédiger l'édition du jour en direct de la galaxie, en te basant uniquement sur l'historique du Tour 1 jusqu'à ce Tour {tour_id}.
@@ -1284,8 +1285,72 @@ def generer_gazette_ia(joueurs_json_str, tour_id):
     {joueurs_json_str}
     """
 
-    response = model.generate_content(prompt)
+
+def generer_gazette_gemini(joueurs_json_str, tour_id):
+    if not GEMINI_API_KEY:
+        print("[IA] Clé API Gemini manquante.")
+        return "📰 **Gazette Gemini indisponible : clé API manquante**"
+
+    print(f"[IA] Génération Gemini pour le Tour {tour_id}...")
+    model = genai.GenerativeModel("gemini-3.6-flash")
+    response = model.generate_content(construire_prompt_gazette(joueurs_json_str, tour_id))
     return response.text
+
+
+def generer_gazette_claude(joueurs_json_str, tour_id):
+    if not ANTHROPIC_API_KEY:
+        print("[IA] Clé API Claude manquante.")
+        return "📰 **Gazette Claude indisponible : clé API manquante**"
+
+    print(f"[IA] Génération Claude pour le Tour {tour_id}...")
+    response = requests.post(
+        "https://api.anthropic.com/v1/messages",
+        headers={
+            "x-api-key": ANTHROPIC_API_KEY,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json"
+        },
+        json={
+            "model": ANTHROPIC_MODEL,
+            "max_tokens": 4096,
+            "messages": [{
+                "role": "user",
+                "content": construire_prompt_gazette(joueurs_json_str, tour_id)
+            }]
+        },
+        timeout=180
+    )
+    if not response.ok:
+        raise RuntimeError(f"Claude API {response.status_code}: {response.text[:500]}")
+
+    contenu = response.json().get("content", [])
+    texte = "\n".join(
+        bloc.get("text", "") for bloc in contenu
+        if bloc.get("type") == "text"
+    ).strip()
+    if not texte:
+        raise RuntimeError("Claude API a retourné une réponse sans texte.")
+    return texte
+
+
+def generer_gazettes_comparees(joueurs_json_str, tour_id):
+    gazettes = []
+    for fournisseur, generateur, modele in [
+        ("Gemini", generer_gazette_gemini, "gemini-3.6-flash"),
+        ("Claude", generer_gazette_claude, ANTHROPIC_MODEL)
+    ]:
+        try:
+            texte = generateur(joueurs_json_str, tour_id)
+            statut = "OK"
+        except Exception as erreur:
+            print(f"[IA] Erreur {fournisseur} : {erreur}")
+            texte = f"📰 **Gazette {fournisseur} en erreur**\n`{erreur}`"
+            statut = "ERREUR"
+        gazettes.append({
+            "fournisseur": fournisseur, "modele": modele,
+            "texte": texte, "statut": statut
+        })
+    return gazettes
 
 def envoyer_messages_multiples_discord(liste_messages):
     if not DISCORD_WEBHOOK_URL:
@@ -1414,14 +1479,21 @@ def main():
     save_to_sheet(sh, "narrative_outputs", narrative_rows, ["Joueur", "Payload_JSON"])
     print("[Succès] Structures JSON narratives écrites dans la feuille 'narrative_outputs'.")
 
-    # 4. APPEL IA AVEC LE FICHIER JSON EN INPUT
-    
-    print("\n[IA] Gazette lancée à partir du JSON.")
-    texte_gazette = generer_gazette_ia(payload_complet_str, tours[-1])
-    envoyer_messages_multiples_discord([
-        f"🚀 **[Tour {tours[-1]}] Analyse terminée. Diffusion de la gazette...**",
-        texte_gazette
-    ])
+    # 4. APPELS IA AVEC LE FICHIER JSON EN INPUT
+    print("\n[IA] Génération comparée Gemini / Claude lancée à partir du JSON.")
+    gazettes = generer_gazettes_comparees(payload_complet_str, tours[-1])
+    save_to_sheet(
+        sh,
+        "gazette_comparaison",
+        [[tours[-1], g["fournisseur"], g["modele"], g["statut"], g["texte"]] for g in gazettes],
+        ["Tour_ID", "Fournisseur", "Modele", "Statut", "Gazette"]
+    )
+    envoyer_messages_multiples_discord(
+        [
+            f"🚀 **[Tour {tours[-1]}] Comparaison Gemini / Claude**",
+            *[f"## {g['fournisseur']} ({g['modele']})\n\n{g['texte']}" for g in gazettes]
+        ]
+    )
     print("--- PIPELINE TERMINÉ AVEC SUCCÈS ---")
 
 if __name__ == "__main__":
