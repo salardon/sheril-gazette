@@ -395,8 +395,7 @@ STREAKS = [
 ]
 
 # Clé API Gemini
-GEMINI_API_KEY = userdata.get("CLAUDE_API_KEY")
-#GEMINI_API_KEY = userdata.get("GEMINI_API_KEY")
+GEMINI_API_KEY = userdata.get("GEMINI_API_KEY")
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
 else:
