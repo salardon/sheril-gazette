@@ -338,9 +338,10 @@ import gspread
 import importlib
 import pandas as pd
 import numpy as np
+from datetime import datetime
 from bs4 import BeautifulSoup
 import google.generativeai as genai
-from google.colab import auth, userdata
+from google.colab import auth, userdata, drive as colab_drive
 from sklearn.ensemble import IsolationForest
 
 # 1. Authentification interactive Google Colab
@@ -369,6 +370,15 @@ try:
     DISCORD_WEBHOOK_URL = userdata.get("WEBHOOK_DISCORD")
 except Exception:
     DISCORD_WEBHOOK_URL = os.environ.get("WEBHOOK_DISCORD")
+
+# Répertoire de publication des gazettes au format Markdown : Drive si monté, sinon dossier local.
+GAZETTE_MARKDOWN_DIR = os.environ.get("GAZETTE_MARKDOWN_DIR", "./gazettes_markdown")
+try:
+    colab_drive.mount("/content/drive", force_remount=False)
+    GAZETTE_MARKDOWN_DIR = os.environ.get("GAZETTE_MARKDOWN_DIR", "/content/drive/MyDrive/Sheril_Gazette")
+except Exception as e:
+    print(f"[Markdown] Google Drive non disponible ({e}), utilisation du dossier local '{GAZETTE_MARKDOWN_DIR}'.")
+os.makedirs(GAZETTE_MARKDOWN_DIR, exist_ok=True)
 
 SEUILS_COMPTEURS = {
     "cumul_technologies_donnees": [10, 25, 50, 100],
@@ -1375,6 +1385,22 @@ def envoyer_messages_multiples_discord(liste_messages):
             except Exception as e:
                 print(f"[DISCORD] Exception : {e}")
 
+def enregistrer_gazette_markdown(gazettes, tour_id):
+    horodatage = datetime.now().strftime("%Y%m%d_%H%M%S")
+    chemin = os.path.join(GAZETTE_MARKDOWN_DIR, f"gazette_tour_{tour_id}_{horodatage}.md")
+    lignes = [f"# Gazette du tour {tour_id}", ""]
+    for g in gazettes:
+        lignes.append(f"## {g['fournisseur']} ({g['modele']})")
+        lignes.append("")
+        lignes.append(g["texte"])
+        lignes.append("")
+    try:
+        with open(chemin, "w", encoding="utf-8") as f:
+            f.write("\n".join(lignes))
+        print(f"[Markdown] Gazette enregistrée : {chemin}")
+    except Exception as e:
+        print(f"[Markdown] Erreur d'écriture : {e}")
+
 def save_to_sheet(sh, worksheet_name, rows, headers):
     try:
         ws = sh.worksheet(worksheet_name)
@@ -1496,6 +1522,7 @@ def main():
             *[f"## {g['fournisseur']} ({g['modele']})\n\n{g['texte']}" for g in gazettes]
         ]
     )
+    enregistrer_gazette_markdown(gazettes, tours[-1])
     print("--- PIPELINE TERMINÉ AVEC SUCCÈS ---")
 
 if __name__ == "__main__":
