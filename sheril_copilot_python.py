@@ -365,7 +365,10 @@ SHEET_NAME = "Sheril_Copilot"
 BASE_EXTRACT_DIR = "./extracted_game_data"
 PREMIER_TOUR = 1
 BASE_ZIP_URL = "https://sheril.pbem-france.net/stats/statsT{NUM}.zip"
-DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "https://discord.com/api/webhooks/1540810441402351706/Ph8kE6VVnlLKxkXwIEo_4Y7iMNNK9B0-P-WKsckOcbsInVN6UX_4ADIWtgZ3Mq3dqVEY")
+try:
+    DISCORD_WEBHOOK_URL = userdata.get("WEBHOOK_DISCORD")
+except Exception:
+    DISCORD_WEBHOOK_URL = os.environ.get("WEBHOOK_DISCORD")
 
 SEUILS_COMPTEURS = {
     "cumul_technologies_donnees": [10, 25, 50, 100],
