@@ -341,7 +341,7 @@ import numpy as np
 from datetime import datetime
 from bs4 import BeautifulSoup
 import google.generativeai as genai
-from google.colab import auth, userdata, drive as colab_drive
+from google.colab import auth, userdata
 from sklearn.ensemble import IsolationForest
 
 # 1. Authentification interactive Google Colab
@@ -371,13 +371,8 @@ try:
 except Exception:
     DISCORD_WEBHOOK_URL = os.environ.get("WEBHOOK_DISCORD")
 
-# Répertoire de publication des gazettes au format Markdown : Drive si monté, sinon dossier local.
+# Répertoire local de génération des gazettes Markdown avant envoi en pièce jointe Discord.
 GAZETTE_MARKDOWN_DIR = os.environ.get("GAZETTE_MARKDOWN_DIR", "./gazettes_markdown")
-try:
-    colab_drive.mount("/content/drive", force_remount=False)
-    GAZETTE_MARKDOWN_DIR = os.environ.get("GAZETTE_MARKDOWN_DIR", "/content/drive/MyDrive/Sheril_Gazette")
-except Exception as e:
-    print(f"[Markdown] Google Drive non disponible ({e}), utilisation du dossier local '{GAZETTE_MARKDOWN_DIR}'.")
 os.makedirs(GAZETTE_MARKDOWN_DIR, exist_ok=True)
 
 SEUILS_COMPTEURS = {
@@ -1398,8 +1393,30 @@ def enregistrer_gazette_markdown(gazettes, tour_id):
         with open(chemin, "w", encoding="utf-8") as f:
             f.write("\n".join(lignes))
         print(f"[Markdown] Gazette enregistrée : {chemin}")
+        return chemin
     except Exception as e:
         print(f"[Markdown] Erreur d'écriture : {e}")
+        return None
+
+def envoyer_fichier_discord(chemin_fichier, message=""):
+    if not DISCORD_WEBHOOK_URL:
+        print("[DISCORD] URL du webhook non configurée.")
+        return
+    if not chemin_fichier or not os.path.isfile(chemin_fichier):
+        print(f"[DISCORD] Fichier introuvable : {chemin_fichier}")
+        return
+
+    try:
+        with open(chemin_fichier, "rb") as f:
+            fichiers = {"file": (os.path.basename(chemin_fichier), f, "text/markdown")}
+            data = {"payload_json": json.dumps({"content": message})}
+            response = requests.post(DISCORD_WEBHOOK_URL, data=data, files=fichiers)
+        if response.status_code == 204 or response.ok:
+            print(f"[DISCORD] Fichier '{os.path.basename(chemin_fichier)}' envoyé en pièce jointe.")
+        else:
+            print(f"[DISCORD] Erreur d'envoi du fichier : {response.status_code} - {response.text}")
+    except Exception as e:
+        print(f"[DISCORD] Exception lors de l'envoi du fichier : {e}")
 
 def save_to_sheet(sh, worksheet_name, rows, headers):
     try:
@@ -1522,7 +1539,8 @@ def main():
             *[f"## {g['fournisseur']} ({g['modele']})\n\n{g['texte']}" for g in gazettes]
         ]
     )
-    enregistrer_gazette_markdown(gazettes, tours[-1])
+    chemin_markdown = enregistrer_gazette_markdown(gazettes, tours[-1])
+    envoyer_fichier_discord(chemin_markdown, f"📄 Gazette du tour {tours[-1]} (Markdown)")
     print("--- PIPELINE TERMINÉ AVEC SUCCÈS ---")
 
 if __name__ == "__main__":
