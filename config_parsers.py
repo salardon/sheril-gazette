@@ -138,19 +138,28 @@ def parse_classement_generique(soup, tour_id):
             race = "-"
             valeur = 0.0
 
-            for i, col in enumerate(cols):
-                txt = col.get_text(strip=True)
-                if txt.isdigit() and len(txt) <= 3 and i >= 2:
-                    jid = txt
-                if txt in ["Atalantes", "Fergok", "Yoksor", "Zwaias", "Fremens", "Humain", "Cyborg"]:
-                    race = txt
+            # La colonne Numéro est identifiée par un span de classe c6 : on la
+            # priorise pour ne pas confondre l'ID joueur avec une valeur de classement
+            # non formatée (ex: dégâts < 1000 sans séparateur de milliers).
+            for col in cols:
+                span_num = col.find("span", class_="c6")
+                if span_num and span_num.get_text(strip=True).isdigit():
+                    jid = span_num.get_text(strip=True)
+                    break
 
             if not jid:
-                for col in cols:
-                    span_num = col.find("span", class_="c6")
-                    if span_num and span_num.get_text(strip=True).isdigit():
-                        jid = span_num.get_text(strip=True)
+                # Repli heuristique : on exclut la dernière colonne (la valeur) et on
+                # s'arrête au premier nombre trouvé pour éviter tout écrasement.
+                for i, col in enumerate(cols[:-1]):
+                    txt = col.get_text(strip=True)
+                    if txt.isdigit() and len(txt) <= 3 and i >= 2:
+                        jid = txt
                         break
+
+            for col in cols:
+                txt = col.get_text(strip=True)
+                if txt in ["Atalantes", "Fergok", "Yoksor", "Zwaias", "Fremens", "Humain", "Cyborg"]:
+                    race = txt
 
             if not jid:
                 continue

@@ -71,19 +71,28 @@ import os
 #             race = "-"
 #             valeur = 0.0
 # 
-#             for i, col in enumerate(cols):
-#                 txt = col.get_text(strip=True)
-#                 if txt.isdigit() and len(txt) <= 3 and i >= 2:
-#                     jid = txt
-#                 if txt in ["Atalantes", "Fergok", "Yoksor", "Zwaias", "Fremens", "Humain", "Cyborg"]:
-#                     race = txt
+#             # La colonne Numéro est identifiée par un span de classe c6 : on la
+#             # priorise pour ne pas confondre l'ID joueur avec une valeur de classement
+#             # non formatée (ex: dégâts < 1000 sans séparateur de milliers).
+#             for col in cols:
+#                 span_num = col.find("span", class_="c6")
+#                 if span_num and span_num.get_text(strip=True).isdigit():
+#                     jid = span_num.get_text(strip=True)
+#                     break
 # 
 #             if not jid:
-#                 for col in cols:
-#                     span_num = col.find("span", class_="c6")
-#                     if span_num and span_num.get_text(strip=True).isdigit():
-#                         jid = span_num.get_text(strip=True)
+#                 # Repli heuristique : on exclut la dernière colonne (la valeur) et on
+#                 # s'arrête au premier nombre trouvé pour éviter tout écrasement.
+#                 for i, col in enumerate(cols[:-1]):
+#                     txt = col.get_text(strip=True)
+#                     if txt.isdigit() and len(txt) <= 3 and i >= 2:
+#                         jid = txt
 #                         break
+# 
+#             for col in cols:
+#                 txt = col.get_text(strip=True)
+#                 if txt in ["Atalantes", "Fergok", "Yoksor", "Zwaias", "Fremens", "Humain", "Cyborg"]:
+#                     race = txt
 # 
 #             if not jid:
 #                 continue
@@ -332,6 +341,7 @@ import os
 
 import os
 import json
+import re
 import zipfile
 import requests
 import gspread
@@ -401,6 +411,15 @@ STREAKS = [
     "streak_variation_planetes", "streak_variation_centaures",
     "streak_achat_lieutenant", "streak_don_public"
 ]
+
+RACE_COLORS = {
+    "Fremens": "#CC00FF",
+    "Atalantes": "#0066CC",
+    "Zwaias": "#FFCC00",
+    "Yoksor": "#CC0033",
+    "Fergok": "#009933",
+    "Cyborg": "#777777"
+}
 
 # Clé API Gemini
 GEMINI_API_KEY = userdata.get("GEMINI_API_KEY")
@@ -1380,14 +1399,33 @@ def envoyer_messages_multiples_discord(liste_messages):
             except Exception as e:
                 print(f"[DISCORD] Exception : {e}")
 
-def enregistrer_gazette_markdown(gazettes, tour_id):
+def enregistrer_gazette_markdown(gazettes, tour_id, races_par_joueur=None):
+    def colorer_races(texte):
+        if not races_par_joueur:
+            return texte
+        # On associe chaque commandant à sa couleur de race, puis on colore
+        # aussi les mentions directes du nom de la race dans le texte.
+        mentions = {**races_par_joueur, **{race: race for race in RACE_COLORS}}
+        motifs = sorted(mentions.keys(), key=len, reverse=True)
+        pattern = re.compile(r'\b(' + '|'.join(re.escape(m) for m in motifs) + r')\b')
+
+        def remplacer(match):
+            terme = match.group(0)
+            race = mentions.get(terme)
+            couleur = RACE_COLORS.get(race)
+            if not couleur:
+                return terme
+            return f'<span style="color:{couleur}">{terme}</span>'
+
+        return pattern.sub(remplacer, texte) if motifs else texte
+
     horodatage = datetime.now().strftime("%Y%m%d_%H%M%S")
     chemin = os.path.join(GAZETTE_MARKDOWN_DIR, f"gazette_tour_{tour_id}_{horodatage}.md")
     lignes = [f"# Gazette du tour {tour_id}", ""]
     for g in gazettes:
         lignes.append(f"## {g['fournisseur']} ({g['modele']})")
         lignes.append("")
-        lignes.append(g["texte"])
+        lignes.append(colorer_races(g["texte"]))
         lignes.append("")
     try:
         with open(chemin, "w", encoding="utf-8") as f:
@@ -1533,13 +1571,15 @@ def main():
         [[tours[-1], g["fournisseur"], g["modele"], g["statut"], g["texte"]] for g in gazettes],
         ["Tour_ID", "Fournisseur", "Modele", "Statut", "Gazette"]
     )
-    envoyer_messages_multiples_discord(
-        [
-            f"🚀 **[Tour {tours[-1]}] Comparaison Gemini / Claude**",
-            *[f"## {g['fournisseur']} ({g['modele']})\n\n{g['texte']}" for g in gazettes]
-        ]
-    )
-    chemin_markdown = enregistrer_gazette_markdown(gazettes, tours[-1])
+    # Publication des messages texte sur Discord désactivée : seule la gazette Markdown est envoyée.
+    # envoyer_messages_multiples_discord(
+    #     [
+    #         f"🚀 **[Tour {tours[-1]}] Comparaison Gemini / Claude**",
+    #         *[f"## {g['fournisseur']} ({g['modele']})\n\n{g['texte']}" for g in gazettes]
+    #     ]
+    # )
+    races_par_joueur = {str(data.get("nom", "")): str(data.get("race", "-")) for data in dernier_tour_dict_enrichi.values() if data.get("nom")}
+    chemin_markdown = enregistrer_gazette_markdown(gazettes, tours[-1], races_par_joueur)
     envoyer_fichier_discord(chemin_markdown, f"📄 Gazette du tour {tours[-1]} (Markdown)")
     print("--- PIPELINE TERMINÉ AVEC SUCCÈS ---")
 
