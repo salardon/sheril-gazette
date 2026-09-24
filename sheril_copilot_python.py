@@ -1571,13 +1571,12 @@ def main():
         [[tours[-1], g["fournisseur"], g["modele"], g["statut"], g["texte"]] for g in gazettes],
         ["Tour_ID", "Fournisseur", "Modele", "Statut", "Gazette"]
     )
-    # Publication des messages texte sur Discord désactivée : seule la gazette Markdown est envoyée.
-    # envoyer_messages_multiples_discord(
-    #     [
-    #         f"🚀 **[Tour {tours[-1]}] Comparaison Gemini / Claude**",
-    #         *[f"## {g['fournisseur']} ({g['modele']})\n\n{g['texte']}" for g in gazettes]
-    #     ]
-    # )
+    envoyer_messages_multiples_discord(
+        [
+            f"🚀 **[Tour {tours[-1]}] Comparaison Gemini / Claude**",
+            *[f"## {g['fournisseur']} ({g['modele']})\n\n{g['texte']}" for g in gazettes]
+        ]
+    )
     races_par_joueur = {str(data.get("nom", "")): str(data.get("race", "-")) for data in dernier_tour_dict_enrichi.values() if data.get("nom")}
     chemin_markdown = enregistrer_gazette_markdown(gazettes, tours[-1], races_par_joueur)
     envoyer_fichier_discord(chemin_markdown, f"📄 Gazette du tour {tours[-1]} (Markdown)")
